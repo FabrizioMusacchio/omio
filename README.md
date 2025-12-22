@@ -37,6 +37,13 @@ It provides:
 * and a consistent interface for both batch conversion and interactive visualization.
 
 
+## Installation
+OMIO can be installed via pip from the Python Package Index (PyPI):
+
+```bash
+pip install omio-microscopy
+```
+
 ## Design principles
 OMIO is built around the following principles:
 
