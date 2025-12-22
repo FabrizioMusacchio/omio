@@ -21,6 +21,7 @@ requires-python = ">=3.12"
 dependencies = [
     "numpy",
     "tifffile",
+    "imagecodecs",
     "czifile",
     "zarr",
     "dask[array]",

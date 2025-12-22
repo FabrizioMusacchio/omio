@@ -297,7 +297,7 @@ def test_read_tif_paginated_returns_lists_and_contains_expected_xy_shapes(tmp_pa
         options = dict(
             photometric='rgb',
             tile=(16, 16),
-            compression='zlib',
+            compression='jpeg',
             resolutionunit='CENTIMETER',
             maxworkers=2)
         tif.write(
@@ -321,6 +321,9 @@ def test_read_tif_paginated_returns_lists_and_contains_expected_xy_shapes(tmp_pa
         tif.write(thumbnail, metadata={'Name': 'thumbnail'})
 
     images, metadatas = read_tif(str(f), verbose=False)
+
+    # # for this test function, we clear the captured output:
+    # capsys.readouterr()
 
     assert not isinstance(images, list)
     assert metadatas["axes"] == "TZCYX"
@@ -1741,7 +1744,7 @@ def _write_pyramid_ome_tif(path: Path, shape=(8, 2, 20, 20, 3), subresolutions=2
         options = dict(
             photometric="rgb",
             tile=(16, 16),
-            compression="zlib",
+            compression="jpeg",
             resolutionunit="CENTIMETER",
             maxworkers=2,
         )
