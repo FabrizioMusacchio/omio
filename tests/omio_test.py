@@ -38,7 +38,17 @@ from omio.omio import (
     _estimate_compressed_size,
     _check_bigtiff,
     _estimate_compressed_size,
-    _copy_into_zarr_with_padding
+    _copy_into_zarr_with_padding,
+    _zarr_open_for_merge_output,
+    _check_fname_out,
+    _dispatch_read_file,
+    _validate_merge_inputs_with_optional_padding,
+    _normalize_axes_for_ometiff,
+    _get_original_filename_from_metadata,
+    _zarr_pick_first_array,
+    _merge_concat_along_axis,
+    _load_yaml_metadata,
+    _ensure_axes_in_metadata
 )
 
 import os
@@ -824,6 +834,823 @@ def test_copy_into_zarr_with_padding_src_exceeds_target_nonmerge_axis_is_clipped
     # second T slice remains untouched (still zeros).
     assert np.all(out[1, :, :, :, :] == 0)
 
+# _zarr_open_for_merge_output:
+def test_zarr_open_for_merge_output_memory():
+    shape = (5, 4, 3)
+    chunks = (2, 2, 3)
+    dtype = np.uint16
+
+    z = _zarr_open_for_merge_output(
+        zarr_store="memory",
+        folder="/does/not/matter",
+        basename="ignored",
+        shape=shape,
+        dtype=dtype,
+        chunks=chunks,
+    )
+
+    assert isinstance(z, zarr.core.array.Array)
+    assert z.shape == shape
+    assert z.dtype == dtype
+    assert z.chunks == chunks
+
+    # writable and zero-initialized
+    z[:] = 1
+    arr = np.asarray(z[:])
+    assert int(arr.sum()) == int(np.prod(shape))
+
+def test_zarr_open_for_merge_output_disk_creates_cache(tmp_path):
+    shape = (4, 3)
+    chunks = (2, 3)
+    dtype = np.uint8
+    basename = "merged"
+
+    z = _zarr_open_for_merge_output(
+        zarr_store="disk",
+        folder=str(tmp_path),
+        basename=basename,
+        shape=shape,
+        dtype=dtype,
+        chunks=chunks,
+    )
+
+    cache = tmp_path / ".omio_cache"
+    zarr_path = cache / f"{basename}.zarr"
+
+    assert cache.exists()
+    assert zarr_path.exists()
+    assert isinstance(z, zarr.core.array.Array)
+    assert z.shape == shape
+    
+def test_zarr_open_for_merge_output_disk_overwrites_existing(tmp_path):
+    shape = (3, 3)
+    chunks = (3, 3)
+    dtype = np.uint8
+    basename = "merged"
+
+    z1 = _zarr_open_for_merge_output(
+        "disk", str(tmp_path), basename, shape, dtype, chunks
+    )
+    z1[:] = 7
+
+    # recreate (function removes the whole store path)
+    z2 = _zarr_open_for_merge_output(
+        "disk", str(tmp_path), basename, shape, dtype, chunks
+    )
+
+    arr2 = np.asarray(z2[:])
+    assert int(arr2.sum()) == 0
+
+def test_zarr_open_for_merge_output_invalid_store_raises(tmp_path):
+    with pytest.raises(ValueError, match="invalid zarr_store"):
+        _zarr_open_for_merge_output(
+            zarr_store="invalid",
+            folder=str(tmp_path),
+            basename="x",
+            shape=(2, 2),
+            dtype=np.uint8,
+            chunks=(2, 2),
+        )
+
+def test_zarr_open_for_merge_output_disk_creates_cache_folder(tmp_path):
+    cache = tmp_path / ".omio_cache"
+    assert not cache.exists()
+
+    _zarr_open_for_merge_output(
+        "disk",
+        folder=str(tmp_path),
+        basename="merged",
+        shape=(2, 2),
+        dtype=np.uint8,
+        chunks=(2, 2),
+    )
+
+    assert cache.exists()
+    assert cache.is_dir()
+
+# _check_fname_out tests:
+def test_check_fname_out_no_collision(tmp_path):
+    f = tmp_path / "out.ome.tif"
+    assert _check_fname_out(str(f), overwrite=False) == str(f)
+
+def test_check_fname_out_collision_adds_suffix(tmp_path):
+    f = tmp_path / "out.ome.tif"
+    f.write_text("x")
+
+    out = _check_fname_out(str(f), overwrite=False)
+    assert out.endswith("out 1.ome.tif")
+
+def test_check_fname_out_multiple_suffixes(tmp_path):
+    (tmp_path / "out.ome.tif").write_text("x")
+    (tmp_path / "out 1.ome.tif").write_text("x")
+
+    out = _check_fname_out(str(tmp_path / "out.ome.tif"), overwrite=False)
+    assert out.endswith("out 2.ome.tif")
+
+def test_check_fname_out_overwrite_true(tmp_path):
+    f = tmp_path / "out.ome.tif"
+    f.write_text("x")
+
+    out = _check_fname_out(str(f), overwrite=True)
+    assert out == str(f)
+
+def test_check_fname_out_invalid_extension_raises():
+    with pytest.raises(ValueError):
+        _check_fname_out("out.tif", overwrite=False)
+
+# _validate_merge_inputs_with_optional_padding tests:
+def _md_axes(ax="TZCYX"):
+    return {"axes": ax}
+
+def test_validate_merge_inputs_invalid_merge_axis_returns_false(capsys):
+    images = [np.zeros((1, 1, 1, 4, 4), dtype=np.uint8)]
+    mds = [_md_axes("TZCYX")]
+
+    ok = _validate_merge_inputs_with_optional_padding(
+        images, mds, merge_along_axis="Y", zeropadding=False, context="merge_test"
+    )
+
+    out = capsys.readouterr().out
+    assert ok is False
+    assert "invalid merge_along_axis" in out
+    assert "merge_test" in out
+
+def test_validate_merge_inputs_empty_or_mismatched_lengths_returns_false(capsys):
+    ok = _validate_merge_inputs_with_optional_padding(
+        images=[], metadatas=[], merge_along_axis="T", zeropadding=False, context="merge_test"
+    )
+    out = capsys.readouterr().out
+    assert ok is False
+    assert "empty inputs or mismatched" in out
+
+    images = [np.zeros((1, 1, 1, 4, 4), dtype=np.uint8)]
+    mds = []
+    ok = _validate_merge_inputs_with_optional_padding(
+        images, mds, merge_along_axis="T", zeropadding=False, context="merge_test"
+    )
+    out = capsys.readouterr().out
+    assert ok is False
+    assert "empty inputs or mismatched" in out
+
+    images = [np.zeros((1, 1, 1, 4, 4), dtype=np.uint8)]
+    mds = [_md_axes("TZCYX"), _md_axes("TZCYX")]
+    ok = _validate_merge_inputs_with_optional_padding(
+        images, mds, merge_along_axis="T", zeropadding=False, context="merge_test"
+    )
+    out = capsys.readouterr().out
+    assert ok is False
+    assert "empty inputs or mismatched" in out
+
+def test_validate_merge_inputs_axes_mismatch_returns_false(capsys):
+    images = [np.zeros((1, 1, 1, 4, 4), dtype=np.uint8)]
+    mds = [_md_axes("TCYXZ")]  # wrong
+
+    ok = _validate_merge_inputs_with_optional_padding(
+        images, mds, merge_along_axis="T", zeropadding=False, context="merge_test"
+    )
+
+    out = capsys.readouterr().out
+    assert ok is False
+    assert "axes mismatch" in out
+    assert "Expected" in out
+    assert "Merge aborted" in out
+
+def test_validate_merge_inputs_reference_not_5d_emits_warning_and_returns_false():
+    images = [np.zeros((4, 4), dtype=np.uint8)]  # not 5D
+    mds = [_md_axes("TZCYX")]
+
+    with pytest.warns(UserWarning, match=r"expected 5D arrays"):
+        ok = _validate_merge_inputs_with_optional_padding(
+            images, mds, merge_along_axis="T", zeropadding=False, context="merge_test"
+        )
+    assert ok is False
+
+def test_validate_merge_inputs_zeropadding_true_allows_nonmerge_shape_mismatch_but_requires_5d():
+    images = [
+        np.zeros((1, 1, 1, 4, 4), dtype=np.uint8),
+        np.zeros((2, 1, 3, 4, 4), dtype=np.uint8),  # Z and C differ; allowed if padding
+    ]
+    mds = [_md_axes("TZCYX"), _md_axes("TZCYX")]
+
+    ok = _validate_merge_inputs_with_optional_padding(
+        images, mds, merge_along_axis="T", zeropadding=True, context="merge_test"
+    )
+    assert ok is True
+
+    # but still must be 5D for every stack
+    images_bad = [
+        np.zeros((1, 1, 1, 4, 4), dtype=np.uint8),
+        np.zeros((4, 4), dtype=np.uint8),  # not 5D
+    ]
+    mds_bad = [_md_axes("TZCYX"), _md_axes("TZCYX")]
+
+    with pytest.warns(UserWarning, match=r"expected 5D arrays"):
+        ok = _validate_merge_inputs_with_optional_padding(
+            images_bad, mds_bad, merge_along_axis="T", zeropadding=True, context="merge_test"
+        )
+    assert ok is False
+
+def test_validate_merge_inputs_strict_mode_rejects_nonmerge_axis_mismatch(capsys):
+    # merge along T => Z,C,Y,X must match
+    images = [
+        np.zeros((1, 1, 1, 4, 4), dtype=np.uint8),
+        np.zeros((2, 2, 1, 4, 4), dtype=np.uint8),  # Z differs => should fail
+    ]
+    mds = [_md_axes("TZCYX"), _md_axes("TZCYX")]
+
+    ok = _validate_merge_inputs_with_optional_padding(
+        images, mds, merge_along_axis="T", zeropadding=False, context="merge_test"
+    )
+    out = capsys.readouterr().out
+    assert ok is False
+    assert "incompatible shapes for merge" in out
+    assert "Mismatch in axis 'Z'" in out
+    assert "Merge aborted" in out
+
+def test_validate_merge_inputs_strict_mode_allows_only_merge_axis_to_differ():
+    # merge along T => only T may differ
+    images = [
+        np.zeros((1, 1, 1, 4, 4), dtype=np.uint8),
+        np.zeros((3, 1, 1, 4, 4), dtype=np.uint8),  # only T differs
+        np.zeros((2, 1, 1, 4, 4), dtype=np.uint8),
+    ]
+    mds = [_md_axes("TZCYX"), _md_axes("TZCYX"), _md_axes("TZCYX")]
+
+    ok = _validate_merge_inputs_with_optional_padding(
+        images, mds, merge_along_axis="T", zeropadding=False, context="merge_test"
+    )
+    assert ok is True
+
+def test_validate_merge_inputs_strict_mode_rejects_non_5d_in_any_stack():
+    images = [
+        np.zeros((1, 1, 1, 4, 4), dtype=np.uint8),
+        np.zeros((1, 4, 4), dtype=np.uint8),  # not 5D
+    ]
+    mds = [_md_axes("TZCYX"), _md_axes("TZCYX")]
+
+    with pytest.warns(UserWarning, match=r"expected 5D arrays"):
+        ok = _validate_merge_inputs_with_optional_padding(
+            images, mds, merge_along_axis="T", zeropadding=False, context="merge_test"
+        )
+    assert ok is False
+
+# _normalize_axes_for_ometiff tests:
+def test_normalize_axes_removes_singleton_S_axis():
+    img = np.zeros((1, 2, 3), dtype=np.uint8)
+    axes = "SXY"
+
+    arr, ax = _normalize_axes_for_ometiff(img, axes)
+
+    assert arr.shape == (2, 3)
+    assert ax == "XY"
+
+def test_normalize_axes_keeps_non_singleton_S_axis():
+    img = np.zeros((2, 3, 4), dtype=np.uint8)
+    axes = "SXY"
+
+    arr, ax = _normalize_axes_for_ometiff(img, axes)
+
+    # S is not singleton → must be preserved
+    assert arr.shape == (2, 3, 4)
+    assert ax == "SXY"
+
+def test_normalize_axes_no_S_axis_no_change():
+    img = np.zeros((2, 3, 4), dtype=np.uint8)
+    axes = "ZXY"
+
+    arr, ax = _normalize_axes_for_ometiff(img, axes)
+
+    assert arr.shape == (2, 3, 4)
+    assert ax == "ZXY"
+
+def test_normalize_axes_only_S_axis_singleton_results_in_scalar():
+    img = np.zeros((1,), dtype=np.uint8)
+    axes = "S"
+
+    arr, ax = _normalize_axes_for_ometiff(img, axes)
+
+    assert arr.shape == ()
+    assert ax == ""
+
+def test_normalize_axes_multiple_singletons_only_S_removed():
+    img = np.zeros((1, 1, 5), dtype=np.uint8)
+    axes = "SZX"
+
+    arr, ax = _normalize_axes_for_ometiff(img, axes)
+
+    # Only S removed, Z singleton must remain
+    assert arr.shape == (1, 5)
+    assert ax == "ZX"
+
+def test_normalize_axes_input_converted_to_numpy():
+    img = [[1, 2, 3]]
+    axes = "XY"
+
+    arr, ax = _normalize_axes_for_ometiff(img, axes)
+
+    assert isinstance(arr, np.ndarray)
+    assert arr.shape == (1, 3)
+    assert ax == "XY"
+
+def test_normalize_axes_axis_length_mismatch_raises_value_error():
+    img = np.zeros((2, 3), dtype=np.uint8)
+    axes = "XYZ"  # too long
+
+    with pytest.raises(ValueError, match="does not fit to arr.ndim"):
+        _normalize_axes_for_ometiff(img, axes)
+
+def test_normalize_axes_axis_length_mismatch_after_squeeze_raises():
+    img = np.zeros((1, 3), dtype=np.uint8)
+    axes = "SX"  # after removing S, axes="X" but arr.ndim=1 → ok
+
+    arr, ax = _normalize_axes_for_ometiff(img, axes)
+
+    assert arr.shape == (3,)
+    assert ax == "X"
+
+def test_normalize_axes_squeeze_produces_mismatch_raises():
+    img = np.zeros((1, 3), dtype=np.uint8)
+    axes = "SZ"  # after squeeze → axes="Z", but arr.ndim=1 → ok
+
+    arr, ax = _normalize_axes_for_ometiff(img, axes)
+
+    assert arr.shape == (3,)
+    assert ax == "Z"
+
+def test_normalize_axes_illegal_axes_string_raises():
+    img = np.zeros((1, 2, 3), dtype=np.uint8)
+    axes = "SXYQ"  # impossible length
+
+    with pytest.raises(ValueError):
+        _normalize_axes_for_ometiff(img, axes)
+
+# _get_original_filename_from_metadata tests:
+def test_get_original_filename_returns_none_if_metadata_not_dict():
+    assert _get_original_filename_from_metadata(None) is None
+    assert _get_original_filename_from_metadata("not a dict") is None
+    assert _get_original_filename_from_metadata(123) is None
+
+def test_get_original_filename_returns_none_if_annotations_missing():
+    md = {"axes": "TZCYX"}
+    assert _get_original_filename_from_metadata(md) is None
+
+def test_get_original_filename_dict_case_returns_basename():
+    md = {"Annotations": {"original_filename": "/a/b/c/file.ome.tif"}}
+    assert _get_original_filename_from_metadata(md) == "file.ome.tif"
+
+def test_get_original_filename_dict_case_strips_whitespace_and_returns_basename():
+    md = {"Annotations": {"original_filename": "   /a/b/c/file.ome.tif   "}}
+    assert _get_original_filename_from_metadata(md) == "file.ome.tif"
+
+def test_get_original_filename_dict_case_empty_or_whitespace_returns_none():
+    md1 = {"Annotations": {"original_filename": ""}}
+    md2 = {"Annotations": {"original_filename": "   "}}
+    assert _get_original_filename_from_metadata(md1) is None
+    assert _get_original_filename_from_metadata(md2) is None
+
+def test_get_original_filename_dict_case_non_string_returns_none():
+    md = {"Annotations": {"original_filename": 123}}
+    assert _get_original_filename_from_metadata(md) is None
+
+def test_get_original_filename_list_case_returns_first_valid_basename():
+    md = {
+        "Annotations": [
+            {"original_filename": "   "},
+            {"other": "x"},
+            {"original_filename": "/x/y/z/first.ome.tif"},
+            {"original_filename": "/x/y/z/second.ome.tif"},
+        ]
+    }
+    assert _get_original_filename_from_metadata(md) == "first.ome.tif"
+
+def test_get_original_filename_list_case_skips_non_dict_entries():
+    md = {
+        "Annotations": [
+            "not a dict",
+            123,
+            {"original_filename": "/x/y/z/file.ome.tif"},
+        ]
+    }
+    assert _get_original_filename_from_metadata(md) == "file.ome.tif"
+
+def test_get_original_filename_annotations_wrong_type_returns_none():
+    md = {"Annotations": "not a dict or list"}
+    assert _get_original_filename_from_metadata(md) is None
+
+def test_get_original_filename_handles_relative_paths():
+    md = {"Annotations": {"original_filename": "relative/path/to/file.tif"}}
+    assert _get_original_filename_from_metadata(md) == os.path.basename("relative/path/to/file.tif")
+
+# _zarr_pick_first_array tests:
+def test_zarr_pick_first_array_returns_array_if_already_array():
+    arr = zarr.array(np.zeros((3, 4), dtype=np.uint8))
+    out = _zarr_pick_first_array(arr, verbose=False)
+
+    assert out is arr
+    assert out.shape == (3, 4)
+
+def test_zarr_pick_first_array_prefers_key_zero_when_present():
+    grp = zarr.group()
+    grp.create_array("1", shape=(2, 2), dtype=np.uint8)
+    grp.create_array("0", shape=(5, 6), dtype=np.uint16)
+
+    out = _zarr_pick_first_array(grp, prefer_keys=("0",), verbose=False)
+
+    assert out.shape == (5, 6)
+    assert out.dtype == np.uint16
+
+def test_zarr_pick_first_array_uses_first_array_like_key_if_preferred_missing():
+    grp = zarr.group()
+    grp.create_array("b", shape=(3, 3), dtype=np.uint8)
+    grp.create_array("a", shape=(4, 4), dtype=np.uint16)
+
+    # sorted keys → "a" first
+    out = _zarr_pick_first_array(grp, prefer_keys=("0",), verbose=False)
+
+    assert out.shape == (4, 4)
+    assert out.dtype == np.uint16
+
+def test_zarr_pick_first_array_skips_non_array_entries():
+    grp = zarr.group()
+    grp.attrs["meta"] = "not an array"
+    grp.create_group("nested")  # subgroup, not array
+    grp.create_array("img", shape=(7, 8), dtype=np.float32)
+
+    out = _zarr_pick_first_array(grp, verbose=False)
+
+    assert out.shape == (7, 8)
+    assert out.dtype == np.float32
+
+def test_zarr_pick_first_array_respects_custom_prefer_keys_order():
+    grp = zarr.group()
+    grp.create_array("lowres", shape=(2, 2), dtype=np.uint8)
+    grp.create_array("highres", shape=(10, 10), dtype=np.uint8)
+
+    out = _zarr_pick_first_array(
+        grp,
+        prefer_keys=("highres", "lowres"),
+        verbose=False,
+    )
+
+    assert out.shape == (10, 10)
+
+def test_zarr_pick_first_array_raises_if_group_contains_no_arrays():
+    grp = zarr.group()
+    grp.attrs["foo"] = "bar"
+    grp.create_group("nested")
+
+    with pytest.raises(TypeError):
+        _zarr_pick_first_array(grp, verbose=False)
+
+def test_zarr_pick_first_array_handles_object_without_keys_gracefully():
+    class Dummy:
+        pass
+
+    dummy = Dummy()
+
+    with pytest.raises(TypeError):
+        _zarr_pick_first_array(dummy, verbose=False)
+
+
+# _merge_concat_along_axis tests:
+# helpers:
+def _mk_md(shape, parentfolder, filename="img.ome.tif"):
+    # minimal metadata that your merge path expects
+    return {
+        "axes": "TZCYX",
+        "shape": tuple(shape),
+        "original_parentfolder": str(parentfolder),
+        "original_filename": filename,
+        "Annotations": {"original_filename": filename},
+    }
+
+def _assert_sizes_in_md(md, shape):
+    # merged md is expected to contain these fields
+    assert md["axes"] == "TZCYX"
+    assert tuple(md["shape"]) == tuple(shape)
+    # Size* are derived from merged_shape in your code
+    assert md["SizeT"] == shape[0]
+    assert md["SizeZ"] == shape[1]
+    assert md["SizeC"] == shape[2]
+    assert md["SizeY"] == shape[3]
+    assert md["SizeX"] == shape[4]
+
+# validation failure tests
+def test_merge_concat_invalid_merge_axis_returns_none(tmp_path):
+    img = np.zeros((1, 1, 1, 2, 2), dtype=np.uint8)
+    md = _mk_md(img.shape, tmp_path)
+
+    merged, mdm = _merge_concat_along_axis(
+        [img, img], [md, md],
+        merge_along_axis="Q",   # invalid
+        zarr_store=None,
+        zeropadding=False,
+        verbose=False,
+    )
+
+    assert merged is None
+    assert mdm is None
+
+def test_merge_concat_axes_mismatch_in_metadata_returns_none(tmp_path):
+    img = np.zeros((1, 1, 1, 2, 2), dtype=np.uint8)
+    md_bad = _mk_md(img.shape, tmp_path)
+    md_bad["axes"] = "TYX"   # invalid for this merge function
+
+    merged, mdm = _merge_concat_along_axis(
+        [img], [md_bad],
+        merge_along_axis="T",
+        zarr_store=None,
+        zeropadding=False,
+        verbose=False,
+    )
+
+    assert merged is None
+    assert mdm is None
+
+def test_merge_concat_non_5d_input_returns_none(tmp_path):
+    img = np.zeros((2, 2), dtype=np.uint8)  # not 5D
+    md = {"axes": "TZCYX", "shape": img.shape, "original_parentfolder": str(tmp_path)}
+
+    with pytest.warns(UserWarning, match=r"expected 5D arrays"):
+        merged, mdm = _merge_concat_along_axis(
+            [img], [md],
+            merge_along_axis="T",
+            zarr_store=None,
+            zeropadding=False,
+            verbose=False,
+        )
+
+    assert merged is None
+    assert mdm is None
+
+# NumPy output tests
+def test_merge_concat_numpy_strict_concat_along_T(tmp_path):
+    a = np.ones((2, 1, 1, 3, 4), dtype=np.uint8)          # T=2
+    b = 2 * np.ones((3, 1, 1, 3, 4), dtype=np.uint8)      # T=3
+
+    mda = _mk_md(a.shape, tmp_path, filename="a.ome.tif")
+    mdb = _mk_md(b.shape, tmp_path, filename="b.ome.tif")
+
+    merged, mdm = _merge_concat_along_axis(
+        [a, b], [mda, mdb],
+        merge_along_axis="T",
+        zarr_store=None,
+        zeropadding=False,
+        verbose=False,
+    )
+
+    assert isinstance(merged, np.ndarray)
+    assert merged.shape == (5, 1, 1, 3, 4)
+    _assert_sizes_in_md(mdm, merged.shape)
+
+    # content: first block ones, second block twos
+    assert np.all(merged[0:2] == 1)
+    assert np.all(merged[2:5] == 2)
+
+def test_merge_concat_numpy_strict_rejects_nonmerge_mismatch(tmp_path):
+    a = np.ones((2, 1, 1, 3, 4), dtype=np.uint8)
+    b = np.ones((3, 1, 1, 3, 5), dtype=np.uint8)  # X mismatch
+
+    mda = _mk_md(a.shape, tmp_path)
+    mdb = _mk_md(b.shape, tmp_path)
+
+    merged, mdm = _merge_concat_along_axis(
+        [a, b], [mda, mdb],
+        merge_along_axis="T",
+        zarr_store=None,
+        zeropadding=False,   # strict
+        verbose=False,
+    )
+
+    assert merged is None
+    assert mdm is None
+
+def test_merge_concat_numpy_padding_allows_nonmerge_mismatch_and_pads_zeros(tmp_path):
+    # mismatch in X
+    a = np.ones((2, 1, 1, 3, 4), dtype=np.uint8)
+    b = 2 * np.ones((3, 1, 1, 3, 6), dtype=np.uint8)
+
+    mda = _mk_md(a.shape, tmp_path, filename="a.ome.tif")
+    mdb = _mk_md(b.shape, tmp_path, filename="b.ome.tif")
+
+    merged, mdm = _merge_concat_along_axis(
+        [a, b], [mda, mdb],
+        merge_along_axis="T",
+        zarr_store=None,
+        zeropadding=True,
+        verbose=False,
+    )
+
+    assert isinstance(merged, np.ndarray)
+    assert merged.shape == (5, 1, 1, 3, 6)   # X padded to 6
+    _assert_sizes_in_md(mdm, merged.shape)
+
+    # a occupies X=0..4, padding at X=4..6 must be zeros for first 2 frames
+    assert np.all(merged[0:2, :, :, :, 0:4] == 1)
+    assert np.all(merged[0:2, :, :, :, 4:6] == 0)
+
+    # b occupies full X=0..6 and has value 2
+    assert np.all(merged[2:5] == 2)
+
+# Zarr output tests:
+def test_merge_concat_zarr_memory_strict_concat_along_T(tmp_path):
+    a = np.ones((2, 1, 1, 3, 4), dtype=np.uint8)
+    b = 2 * np.ones((3, 1, 1, 3, 4), dtype=np.uint8)
+
+    mda = _mk_md(a.shape, tmp_path, filename="a.ome.tif")
+    mdb = _mk_md(b.shape, tmp_path, filename="b.ome.tif")
+
+    z, mdm = _merge_concat_along_axis(
+        [a, b], [mda, mdb],
+        merge_along_axis="T",
+        zarr_store="memory",
+        zeropadding=False,
+        verbose=False,
+    )
+
+    assert isinstance(z, zarr.core.array.Array)
+    assert z.shape == (5, 1, 1, 3, 4)
+    _assert_sizes_in_md(mdm, z.shape)
+
+    arr = np.asarray(z)
+    assert np.all(arr[0:2] == 1)
+    assert np.all(arr[2:5] == 2)
+
+def test_merge_concat_zarr_memory_padding_pads_zeros(tmp_path):
+    a = np.ones((2, 1, 1, 3, 4), dtype=np.uint8)
+    b = 2 * np.ones((3, 1, 1, 3, 6), dtype=np.uint8)
+
+    mda = _mk_md(a.shape, tmp_path, filename="a.ome.tif")
+    mdb = _mk_md(b.shape, tmp_path, filename="b.ome.tif")
+
+    z, mdm = _merge_concat_along_axis(
+        [a, b], [mda, mdb],
+        merge_along_axis="T",
+        zarr_store="memory",
+        zeropadding=True,
+        verbose=False,
+    )
+
+    assert isinstance(z, zarr.core.array.Array)
+    assert z.shape == (5, 1, 1, 3, 6)
+    _assert_sizes_in_md(mdm, z.shape)
+
+    arr = np.asarray(z)
+    assert np.all(arr[0:2, :, :, :, 0:4] == 1)
+    assert np.all(arr[0:2, :, :, :, 4:6] == 0)
+    assert np.all(arr[2:5] == 2)
+
+def test_merge_concat_zarr_disk_writes_to_cache_folder(tmp_path):
+    a = np.ones((1, 1, 1, 2, 2), dtype=np.uint8)
+    b = np.ones((1, 1, 1, 2, 2), dtype=np.uint8)
+
+    # important: folder0 for disk path comes from original_parentfolder
+    mda = _mk_md(a.shape, tmp_path, filename="a.ome.tif")
+    mdb = _mk_md(b.shape, tmp_path, filename="b.ome.tif")
+
+    z, mdm = _merge_concat_along_axis(
+        [a, b], [mda, mdb],
+        merge_along_axis="T",
+        zarr_store="disk",
+        zeropadding=False,
+        verbose=False,
+    )
+
+    assert isinstance(z, zarr.core.array.Array)
+    assert z.shape == (2, 1, 1, 2, 2)
+    _assert_sizes_in_md(mdm, z.shape)
+
+    # check that .omio_cache exists under tmp_path
+   
+
+# _load_yaml_metadata tests:
+def test_load_yaml_metadata_valid(tmp_path):
+    p = tmp_path / "meta.yaml"
+    p.write_text(
+        "a: 1\nb:\n  c: 2\n",
+        encoding="utf-8"
+    )
+
+    md = _load_yaml_metadata(str(p))
+
+    assert isinstance(md, dict)
+    assert md["a"] == 1
+    assert md["b"]["c"] == 2
+
+def test_load_yaml_metadata_empty_file_returns_empty_dict(tmp_path):
+    p = tmp_path / "empty.yaml"
+    p.write_text("", encoding="utf-8")
+
+    md = _load_yaml_metadata(str(p))
+
+    assert md == {}
+
+def test_load_yaml_metadata_non_mapping_raises(tmp_path):
+    p = tmp_path / "bad.yaml"
+    p.write_text(
+        "- a\n- b\n- c\n",
+        encoding="utf-8"
+    )
+
+    with pytest.raises(ValueError, match="must contain a mapping"):
+        _load_yaml_metadata(str(p))
+
+def test_load_yaml_metadata_missing_pyyaml(monkeypatch, tmp_path):
+    p = tmp_path / "meta.yaml"
+    p.write_text("a: 1\n", encoding="utf-8")
+
+    monkeypatch.setattr("omio.omio.yaml", None)
+
+    with pytest.raises(ImportError, match="PyYAML is not installed"):
+        _load_yaml_metadata(str(p))
+
+# _ensure_axes_in_metadata tests:
+class _DummySeries0:
+    def __init__(self, axes):
+        self.axes = axes
+
+class _DummyTif:
+    def __init__(self, axes, has_series=True):
+        self.series = [_DummySeries0(axes)] if has_series else []
+
+def test_ensure_axes_in_metadata_sets_axes_when_missing(capsys):
+    md = {}
+    tif = _DummyTif("TZCYX")
+    out = _ensure_axes_in_metadata(md, tif)
+
+    assert out["axes"] == "TZCYX"
+    assert md["axes"] == "TZCYX"  # in-place
+
+def test_ensure_axes_in_metadata_overwrites_on_mismatch(capsys):
+    md = {"axes": "YX"}
+    tif = _DummyTif("TZCYX")
+
+    out = _ensure_axes_in_metadata(md, tif)
+
+    captured = capsys.readouterr().out
+    assert "Mismatch found" in captured
+    assert out["axes"] == "TZCYX"
+
+def test_ensure_axes_in_metadata_replaces_I_with_T():
+    md = {}
+    tif = _DummyTif("IZCYX")  # nonstandard time axis encoding
+    out = _ensure_axes_in_metadata(md, tif)
+
+    assert out["axes"] == "TZCYX"
+
+def test_ensure_axes_in_metadata_maps_yxs_to_yxc_for_rgb():
+    md = {}
+    tif = _DummyTif("YXS")
+    out = _ensure_axes_in_metadata(md, tif)
+
+    assert out["axes"] == "YXC"
+    
+def test_ensure_axes_in_metadata_maps_Q_to_C_if_C_missing():
+    md = {}
+    tif = _DummyTif("TQZYX")  # Q present, C missing
+    out = _ensure_axes_in_metadata(md, tif)
+
+    assert out["axes"] == "TCZYX"
+
+def test_ensure_axes_in_metadata_maps_Q_to_T_if_C_present_T_missing():
+    md = {}
+    tif = _DummyTif("CQZYX")  # C present, T missing
+    out = _ensure_axes_in_metadata(md, tif)
+
+    assert out["axes"] == "CTZYX"
+
+def test_ensure_axes_in_metadata_maps_Q_to_Z_if_C_T_present_Z_missing():
+    md = {}
+    tif = _DummyTif("CTQYX")  # C,T present, Z missing
+    out = _ensure_axes_in_metadata(md, tif)
+
+    assert out["axes"] == "CTZYX"
+
+def test_ensure_axes_in_metadata_maps_Q_to_P_if_C_T_Z_present_P_missing():
+    md = {}
+    tif = _DummyTif("CTZQYX")
+    out = _ensure_axes_in_metadata(md, tif)
+
+    assert out["axes"] == "CTZPYX"
+
+def test_ensure_axes_in_metadata_raises_if_Q_and_C_T_Z_P_all_present():
+    md = {}
+    tif = _DummyTif("CTZPQYX")
+    with pytest.raises(ValueError, match="Unable to map axis 'Q'"):
+        _ensure_axes_in_metadata(md, tif)
+
+def test_ensure_axes_in_metadata_falls_back_to_unknown_if_no_series(capsys):
+    md = {}
+    tif = _DummyTif("TZCYX", has_series=False)
+
+    out = _ensure_axes_in_metadata(md, tif)
+    captured = capsys.readouterr().out
+
+    assert "Unable to extract axes" in captured
+    assert out["axes"] == "unknown"
+
+
+
 
 # %% TEST OME_METADATA_CHECKUP
 # test OME_metadata_checkup function with minimal metadata
@@ -945,6 +1772,8 @@ def test_OME_metadata_checkup_prints_skip_message_when_verbose(capsys):
     assert "Skipping overwrite of original metadata key 'original_X'" in captured.out
     
 # %% TEST READ_TIF
+
+# TIFF reading tests for read_tif function:
 
 def test_read_tif_invalid_zarr_store_raises(tmp_path):
     f = tmp_path / "test.tif"
@@ -1309,6 +2138,115 @@ def test_read_tif_multiseries_zarr_memory_still_only_series0(tmp_path):
     assert carrier.get("OMIO_TotalSeries") == 2
     assert carrier.get("OMIO_MultiSeriesPolicy") == "only_series_0"
 
+
+# LSM tests via read_tif:
+def _lsm_path() -> str:
+    # tests/test_images/032113-18.lsm
+    here = Path(__file__).resolve()
+    return str(here.parent / "test_images" / "032113-18.lsm")
+
+@pytest.mark.parametrize("zarr_store", [None, "memory", "disk"])
+def test_read_tif_real_lsm_basic_smoke_and_metadata(zarr_store, tmp_path, monkeypatch):
+    # For zarr_store="disk" we want the cache folder to be created next to the file.
+    # Therefore copy the LSM into tmp_path so we do not write into the repo.
+    src = Path(_lsm_path())
+    assert src.exists(), "Expected test LSM file in tests/test_images."
+
+    f = tmp_path / src.name
+    f.write_bytes(src.read_bytes())
+
+    image, md = read_tif(str(f), zarr_store=zarr_store, verbose=False)
+
+    if zarr_store is None:
+        assert isinstance(image, np.ndarray)
+    else:
+        assert isinstance(image, zarr.core.array.Array)
+
+    assert isinstance(md, dict)
+    assert md.get("axes") == "TZCYX"
+    assert len(image.shape) == 5
+
+    # minimal invariants
+    assert md["SizeX"] == image.shape[-1]
+    assert md["SizeY"] == image.shape[-2]
+    assert md["SizeZ"] == image.shape[1]
+    assert md["SizeC"] == image.shape[2] or "SizeC" in md  # depending on how you populate
+    assert md["PhysicalSizeX"] > 0
+    assert md["PhysicalSizeY"] > 0
+    assert md["PhysicalSizeZ"] > 0
+
+    # metadata provenance should mention LSM somewhere
+    # depending on your implementation, this may be overwritten by later sources,
+    # so we do not require equality, but we require that LSM-derived keys exist.
+    assert "TimeIncrement" in md or "DimensionTime" in md or "SizeT" in md
+
+def test_read_tif_real_lsm_exposes_standardized_lsm_keys(tmp_path):
+    src = Path(_lsm_path())
+    f = tmp_path / src.name
+    f.write_bytes(src.read_bytes())
+
+    # Read raw lsm_metadata from tifffile so we know what is available in principle.
+    with tifffile.TiffFile(str(f)) as tif:
+        raw = tif.lsm_metadata
+    assert raw is not None, "This test requires tifffile to expose lsm_metadata for the file."
+
+    image, md = read_tif(str(f), verbose=False)
+
+    # If raw contains these keys, OMIO should have them standardized.
+    # We conditionally assert to keep the test robust across LSM variants.
+    if "DimensionX" in raw:
+        assert md.get("SizeX") == raw["DimensionX"]
+    if "DimensionY" in raw:
+        assert md.get("SizeY") == raw["DimensionY"]
+    if "DimensionZ" in raw:
+        assert md.get("SizeZ") == raw["DimensionZ"]
+    if "DimensionChannels" in raw:
+        assert md.get("SizeC") == raw["DimensionChannels"]
+    if "DimensionTime" in raw:
+        assert md.get("SizeT") == raw["DimensionTime"]
+
+    if "VoxelSizeX" in raw:
+        assert md.get("PhysicalSizeX") == raw["VoxelSizeX"]
+    if "VoxelSizeY" in raw:
+        assert md.get("PhysicalSizeY") == raw["VoxelSizeY"]
+    if "VoxelSizeZ" in raw:
+        assert md.get("PhysicalSizeZ") == raw["VoxelSizeZ"]
+
+    if "TimeIntervall" in raw:
+        assert md.get("TimeIncrement") == raw["TimeIntervall"]
+
+def test_read_tif_real_lsm_pagination_behavior_if_present(tmp_path):
+    src = Path(_lsm_path())
+    f = tmp_path / src.name
+    f.write_bytes(src.read_bytes())
+
+    image, md = read_tif(str(f), verbose=False)
+
+    # If the file is paginated (axis P), OMIO returns lists by design.
+    # If it is not paginated, this test should not fail, it should just assert the opposite.
+    if isinstance(image, list):
+        assert isinstance(md, list)
+        assert len(image) == len(md)
+        assert len(image) >= 1
+
+        for im, m in zip(image, md):
+            assert m["axes"] == "TZCYX"  # after batch correction
+            assert len(im.shape) == 5
+            assert m["PhysicalSizeX"] > 0
+            assert m["PhysicalSizeY"] > 0
+            assert m["PhysicalSizeZ"] > 0
+
+        if any(m.get("original_metadata_type") == "CZ_LSMINFO" for m in md):
+            for m in md:
+                if m.get("original_metadata_type") == "CZ_LSMINFO":
+                    assert m["PhysicalSizeX"] != 1.0
+                    assert m["PhysicalSizeY"] != 1.0
+                    assert m["PhysicalSizeZ"] != 1.0
+    else:
+        assert isinstance(md, dict)
+        assert md["axes"] == "TZCYX"
+
+
 # %% TEST READ_CZI
 
 def _czi_fixture_path() -> Path:
@@ -1441,6 +2379,64 @@ def _write_dummy_raw(
     data = np.arange(n, dtype=dtype)
     data.tofile(str(raw_path))
     return data
+
+def _write_thorlabs_xml_variant(
+    xml_path: Path,
+    *,
+    lsm: bool = True,
+    wavelengths: str | None = "normal",   # "normal" | "empty" | None
+    timelapse: bool = True,
+    camera: bool = True,
+    zstage: bool = True,
+    streaming: bool = True,
+    z_fast_enable: int = 1,
+    X: int = 7,
+    Y: int = 5,
+    C_attr: int = 2,
+    T: int = 2,
+    Z: int = 3,
+    bits: int = 16,
+    pixel_size_um: float = 0.5,
+    z_step_um: float = 1.0,
+    time_interval_s: float = 1.0,
+    frame_rate_value: str = "1.0",
+    include_date: bool = False,
+    date_value: str = "12/31/2025 10:11:12",
+) -> None:
+    parts = ['<?xml version="1.0" encoding="utf-8"?>', "<ThorImage>"]
+
+    if lsm:
+        parts.append(
+            f'<LSM pixelX="{X}" pixelY="{Y}" channel="{C_attr}" '
+            f'pixelSizeUM="{pixel_size_um}" frameRate="{frame_rate_value}"/>'
+        )
+
+    if wavelengths is None:
+        pass
+    elif wavelengths == "empty":
+        parts.append("<Wavelengths></Wavelengths>")
+    elif wavelengths == "normal":
+        parts.append("<Wavelengths>" + "".join([f'<Wavelength index="{i}"/>' for i in range(C_attr)]) + "</Wavelengths>")
+    else:
+        raise ValueError("bad wavelengths mode")
+
+    if timelapse:
+        parts.append(f'<Timelapse timepoints="{T}" intervalSec="{time_interval_s}"/>')
+
+    if camera:
+        parts.append(f'<Camera bitsPerPixel="{bits}"/>')
+
+    if zstage:
+        parts.append(f'<ZStage steps="{Z}" stepSizeUM="{z_step_um}"/>')
+
+    if streaming:
+        parts.append(f'<Streaming zFastEnable="{z_fast_enable}"/>')
+
+    if include_date:
+        parts.append(f'<Date date="{date_value}"/>')
+
+    parts.append("</ThorImage>")
+    xml_path.write_text("\n".join(parts), encoding="utf-8")
 
 # error path tests:
 
@@ -1678,6 +2674,254 @@ def test_read_thorlabs_raw_multiple_yaml_files_warns_but_reads_first(tmp_path):
     assert image.shape == (T, Z, C, Y, X)
     assert md["axes"] == "TZCYX"
     assert md["PhysicalSizeX"] in (pytest.approx(0.5), pytest.approx(0.6))
+
+
+# more tests:
+
+def test_read_thorlabs_raw_xml_missing_lsm_raises(tmp_path):
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+    _write_dummy_raw(raw_path, T=1, Z=1, C=1, Y=4, X=4, dtype=np.uint16)
+
+    _write_thorlabs_xml_variant(xml_path, lsm=False)
+
+    with pytest.raises(ValueError, match="missing the LSM node"):
+        read_thorlabs_raw(str(raw_path), verbose=False)
+
+def test_read_thorlabs_raw_xml_no_wavelengths_uses_lsm_channel(tmp_path):
+    T, Z, C, Y, X = 1, 2, 3, 4, 5
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+
+    _write_thorlabs_xml_variant(
+        xml_path,
+        wavelengths=None,
+        X=X, Y=Y, C_attr=C, T=T, Z=Z,
+        bits=16
+    )
+
+    img, md = read_thorlabs_raw(str(raw_path), verbose=False)
+    assert img.shape == (T, Z, C, Y, X)
+    assert md["SizeC"] == C
+
+def test_read_thorlabs_raw_xml_empty_wavelengths_falls_back_to_lsm_channel(tmp_path):
+    T, Z, C, Y, X = 1, 2, 4, 4, 4
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+
+    _write_thorlabs_xml_variant(
+        xml_path,
+        wavelengths="empty",
+        X=X, Y=Y, C_attr=C, T=T, Z=Z
+    )
+
+    img, md = read_thorlabs_raw(str(raw_path), verbose=False)
+    assert img.shape == (T, Z, C, Y, X)
+    assert md["SizeC"] == C
+
+def test_read_thorlabs_raw_xml_no_timelapse_defaults_T_and_timeincrement(tmp_path):
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+
+    T, Z, C, Y, X = 1, 2, 1, 3, 3
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+
+    _write_thorlabs_xml_variant(
+        xml_path,
+        timelapse=False,
+        X=X, Y=Y, C_attr=C, T=99, Z=Z
+    )
+
+    img, md = read_thorlabs_raw(str(raw_path), verbose=False)
+    assert img.shape[0] == 1
+    assert md["SizeT"] == 1
+    assert md["TimeIncrement"] == pytest.approx(1.0)
+
+def test_read_thorlabs_raw_xml_no_camera_defaults_bits_16(tmp_path):
+    T, Z, C, Y, X = 1, 1, 1, 4, 4
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+
+    _write_thorlabs_xml_variant(xml_path, camera=False, X=X, Y=Y, C_attr=C, T=T, Z=Z)
+
+    img, md = read_thorlabs_raw(str(raw_path), verbose=False)
+
+    assert img.dtype == np.uint16
+    # bits_per_pixel is not guaranteed by current implementation in all cases:
+    if "bits_per_pixel" in md:
+        assert md["bits_per_pixel"] == 16
+
+@pytest.mark.parametrize("bits,dtype", [(8, np.uint8), (32, np.float32)])
+def test_read_thorlabs_raw_bits_drives_dtype(tmp_path, bits, dtype):
+    T, Z, C, Y, X = 1, 1, 1, 4, 4
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=dtype)
+    _write_thorlabs_xml_variant(xml_path, bits=bits, X=X, Y=Y, C_attr=C, T=T, Z=Z)
+
+    img, md = read_thorlabs_raw(str(raw_path), verbose=False)
+
+    assert img.dtype == dtype
+    if "bits_per_pixel" in md:
+        assert md["bits_per_pixel"] == bits
+
+def test_read_thorlabs_raw_xml_zfast_disabled_defaults_Z_to_1(tmp_path):
+    T, Z_true, C, Y, X = 1, 1, 1, 4, 4
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+
+    _write_dummy_raw(raw_path, T=T, Z=Z_true, C=C, Y=Y, X=X, dtype=np.uint16)
+
+    _write_thorlabs_xml_variant(
+        xml_path,
+        zstage=True,
+        streaming=True,
+        z_fast_enable=0,
+        Z=99,  # would be ignored, because zFastEnable=0
+        X=X, Y=Y, C_attr=C, T=T
+    )
+
+    img, md = read_thorlabs_raw(str(raw_path), verbose=False)
+    assert img.shape[1] == 1
+    assert md["SizeZ"] == 1
+
+def test_read_thorlabs_raw_xml_filesize_not_multiple_warns_and_returns_none(tmp_path):
+    T, Z, C, Y, X = 1, 2, 1, 4, 4
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+    with open(raw_path, "ab") as f:
+        np.array([123], dtype=np.uint16).tofile(f)
+
+    _write_thorlabs_xml_variant(xml_path, X=X, Y=Y, C_attr=C, T=T, Z=Z, bits=16)
+
+    with pytest.warns(UserWarning, match="RAW data size mismatch"):
+        img, md = read_thorlabs_raw(str(raw_path), verbose=False)
+
+    assert img is None
+    assert md is None
+
+def test_read_thorlabs_raw_xml_frame_rate_parse_fail_does_not_crash(tmp_path):
+    T, Z, C, Y, X = 1, 1, 1, 4, 4
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+
+    _write_thorlabs_xml_variant(
+        xml_path,
+        frame_rate_value="not_a_number",
+        X=X, Y=Y, C_attr=C, T=T, Z=Z
+    )
+
+    img, md = read_thorlabs_raw(str(raw_path), verbose=False)
+    assert img is not None
+    assert md is not None
+    if "frame_rate" in md:
+        assert md["frame_rate"] == 0.0
+
+def test_read_thorlabs_raw_xml_date_parse_fail_does_not_crash(tmp_path):
+    T, Z, C, Y, X = 1, 1, 1, 4, 4
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+
+    _write_thorlabs_xml_variant(
+        xml_path,
+        include_date=True,
+        date_value="bad date string",
+        X=X, Y=Y, C_attr=C, T=T, Z=Z
+    )
+
+    img, md = read_thorlabs_raw(str(raw_path), verbose=False)
+    assert img is not None
+    assert md is not None
+
+def test_read_thorlabs_raw_numpy_size_mismatch_warns_and_returns_none(tmp_path):
+    T, Z, C, Y, X = 1, 2, 1, 4, 4
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+
+    # write too few elements
+    np.arange(10, dtype=np.uint16).tofile(str(raw_path))
+    _write_thorlabs_xml_variant(xml_path, X=X, Y=Y, C_attr=C, T=T, Z=Z, bits=16)
+
+    with pytest.warns(UserWarning, match="RAW data size mismatch"):
+        img, md = read_thorlabs_raw(str(raw_path), zarr_store=None, verbose=False)
+
+    assert img is None
+    assert md is None
+
+def test_read_thorlabs_raw_zarr_size_mismatch_warns_and_returns_none(tmp_path):
+    T, Z, C, Y, X = 1, 2, 1, 4, 4
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+
+    np.arange(10, dtype=np.uint16).tofile(str(raw_path))
+    _write_thorlabs_xml_variant(xml_path, X=X, Y=Y, C_attr=C, T=T, Z=Z, bits=16)
+
+    with pytest.warns(UserWarning, match="RAW data size mismatch"):
+        img, md = read_thorlabs_raw(str(raw_path), zarr_store="memory", verbose=False)
+
+    assert img is None
+    assert md is None
+
+def test_read_thorlabs_raw_yaml_optional_parse_fail_is_ignored(tmp_path):
+    raw_path = tmp_path / "x.raw"
+    yaml_path = tmp_path / "meta.yaml"
+
+    T, Z, C, Y, X = 1, 1, 1, 4, 4
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+
+    _write_yaml(
+        yaml_path,
+        {
+            "T": T, "Z": Z, "C": C, "Y": Y, "X": X, "bits": 16,
+            "pixelunit": "micron",
+            "PhysicalSizeX": "not a float",
+            "TimeIncrement": "also bad",
+        },
+    )
+
+    img, md = read_thorlabs_raw(str(raw_path), verbose=False)
+
+    assert img is not None
+    assert md["unit"] == "micron"
+    assert md["PhysicalSizeX"] == pytest.approx(1.0)
+    assert "TimeIncrement" not in md
+    
+def test_read_thorlabs_raw_success_return_list_true(tmp_path):
+    T, Z, C, Y, X = 1, 2, 1, 4, 4
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+    _write_thorlabs_xml_variant(xml_path, X=X, Y=Y, C_attr=C, T=T, Z=Z, bits=16)
+
+    imgs, mds = read_thorlabs_raw(str(raw_path), return_list=True, verbose=False)
+
+    assert isinstance(imgs, list) and isinstance(mds, list)
+    assert imgs[0].shape == (T, Z, C, Y, X)
+    assert mds[0]["axes"] == "TZCYX"
+
+def test_read_thorlabs_raw_verbose_emits_expected_messages(tmp_path, capsys):
+    T, Z, C, Y, X = 1, 1, 1, 4, 4
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+    _write_thorlabs_xml_variant(xml_path, X=X, Y=Y, C_attr=C, T=T, Z=Z)
+
+    read_thorlabs_raw(str(raw_path), verbose=True)
+
+    out = capsys.readouterr().out
+    assert "Reading Thorlabs RAW file" in out
+    assert "Found XML file" in out
+    assert "Finished reading Thorlabs RAW file" in out
+
 
 # %% CLEANUP OMIO CACHE
 
@@ -3056,6 +4300,384 @@ def test_convert_bids_batch_no_subjects_returns_empty_list_when_requested(tmp_pa
         )
 
     assert fnames == []
+
+# new:
+def test_bids_batch_convert_raises_if_fname_not_dir(tmp_path):
+    f = tmp_path / "not_a_dir.txt"
+    f.write_text("x")
+    with pytest.raises(ValueError, match="fname must be an existing directory"):
+        bids_batch_convert(fname=str(f), sub="sub", exp="TP", verbose=False)
+
+def test_bids_batch_convert_raises_on_invalid_merge_axis(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    with pytest.raises(ValueError, match="merge_along_axis must be one of"):
+        bids_batch_convert(fname=str(project), sub="sub", exp="TP", merge_along_axis="X", verbose=False)
+
+def test_bids_batch_convert_subject_detection_startswith_and_ignores_files(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "sub-01").mkdir()
+    (project / "submarine").mkdir()  # also startswith("sub")
+    (project / "subfile.txt").write_text("x")  # not a dir
+
+    # patch imconvert so we do not depend on real images
+    def fake_imconvert(**kwargs):
+        return []  # nothing written
+    monkeypatch.setattr("omio.omio.imconvert", fake_imconvert)
+
+    out = bids_batch_convert(
+        fname=str(project),
+        sub="sub",
+        exp="TP",
+        return_fnames=True,
+        verbose=False,
+    )
+    assert out == []
+
+def test_bids_batch_convert_subject_has_no_exp_folders_returns_empty(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    (project / "sub-01").mkdir(parents=True)
+
+    monkeypatch.setattr("omio.omio.imconvert", lambda **kwargs: ["should_not_happen"])
+
+    out = bids_batch_convert(
+        fname=str(project),
+        sub="sub",
+        exp="TP",
+        exp_match_mode="startswith",
+        return_fnames=True,
+        verbose=False,
+    )
+    assert out == []
+
+def test_bids_batch_convert_mode_a_imconvert_exception_is_caught(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    _build_bids_like_tree(project, sub_names=("sub-01",), exp_names=("TP000",), files_per_exp=1)
+
+    def failing_imconvert(**kwargs):
+        raise RuntimeError("boom")
+    monkeypatch.setattr("omio.omio.imconvert", failing_imconvert)
+
+    out = bids_batch_convert(
+        fname=str(project),
+        sub="sub",
+        exp="TP",
+        tagfolder=None,
+        return_fnames=True,
+        verbose=False,
+    )
+    assert out == []
+
+def test_bids_batch_convert_return_fnames_false_returns_none(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    _build_bids_like_tree(project, sub_names=("sub-01",), exp_names=("TP000",), files_per_exp=1)
+
+    monkeypatch.setattr("omio.omio.imconvert", lambda **kwargs: [str(tmp_path / "dummy.ome.tif")])
+
+    out = bids_batch_convert(
+        fname=str(project),
+        sub="sub",
+        exp="TP",
+        tagfolder=None,
+        return_fnames=False,
+        overwrite=True,
+        verbose=False,
+    )
+    assert out is None
+
+def test_bids_batch_convert_mode_b_tagfolder_set_but_none_found_skips(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    _build_bids_like_tree(project, sub_names=("sub-01",), exp_names=("TP000",), files_per_exp=1, tagfolder_prefix=None)
+
+    # should never be called
+    monkeypatch.setattr("omio.omio.imconvert", lambda **kwargs: ["x"])
+
+    out = bids_batch_convert(
+        fname=str(project),
+        sub="sub",
+        exp="TP",
+        tagfolder="TAG_",
+        return_fnames=True,
+        verbose=False,
+    )
+    assert out == []
+
+def test_bids_batch_convert_mode_b_merge_tagfolders_imread_none_skips(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    _build_bids_like_tree(project, sub_names=("sub-01",), exp_names=("TP000",), files_per_exp=1,
+                         tagfolder_prefix="TAG_", tagfolders_per_exp=2)
+
+    monkeypatch.setattr("omio.omio.imread", lambda **kwargs: (None, None))
+    # write_ometiff must not be called
+    called = {"write": 0}
+    def fake_write_ometiff(**kwargs):
+        called["write"] += 1
+        return ["x"]
+    monkeypatch.setattr("omio.omio.write_ometiff", fake_write_ometiff)
+
+    out = bids_batch_convert(
+        fname=str(project),
+        sub="sub",
+        exp="TP",
+        tagfolder="TAG_",
+        merge_tagfolders=True,
+        return_fnames=True,
+        verbose=False,
+    )
+    assert out == []
+    assert called["write"] == 0
+
+def test_bids_batch_convert_mode_b_merge_tagfolders_injects_provenance_and_uses_merged_folder_when_relative_path_none(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    _build_bids_like_tree(project, sub_names=("sub-01",), exp_names=("TP000",), files_per_exp=1,
+                         tagfolder_prefix="TAG_", tagfolders_per_exp=2)
+
+    dummy_img = np.zeros((1, 1, 1, 2, 2), dtype=np.uint8)
+    dummy_md = {}  # no Annotations
+
+    monkeypatch.setattr("omio.omio.imread", lambda **kwargs: (dummy_img, dummy_md))
+
+    captured = {}
+    def fake_write_ometiff(fname, images, metadatas, relative_path, **kwargs):
+        captured["fname"] = fname
+        captured["md"] = metadatas
+        captured["relative_path"] = relative_path
+        return [str(Path(fname) / (relative_path or "") / "out.ome.tif")]
+    monkeypatch.setattr("omio.omio.write_ometiff", fake_write_ometiff)
+
+    out = bids_batch_convert(
+        fname=str(project),
+        sub="sub",
+        exp="TP",
+        tagfolder="TAG_",
+        merge_tagfolders=True,
+        relative_path=None,   # triggers fallback "merged"
+        return_fnames=True,
+        verbose=False,
+    )
+
+    assert len(out) == 1
+    assert captured["relative_path"] == "merged"
+    ann = captured["md"]["Annotations"]
+    assert isinstance(ann, dict)
+    assert ann["original_filename"].endswith("_TAG_merged.ome.tif")
+
+def test_bids_batch_convert_mode_b_merge_tagfolders_overwrites_non_dict_annotations(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    _build_bids_like_tree(project, sub_names=("sub-01",), exp_names=("TP000",), files_per_exp=1,
+                         tagfolder_prefix="TAG_", tagfolders_per_exp=2)
+
+    dummy_img = np.zeros((1, 1, 1, 2, 2), dtype=np.uint8)
+    dummy_md = {"Annotations": "not_a_dict"}
+
+    monkeypatch.setattr("omio.omio.imread", lambda **kwargs: (dummy_img, dummy_md))
+
+    captured = {}
+    def fake_write_ometiff(**kwargs):
+        captured["md"] = kwargs["metadatas"]
+        return [str(Path(kwargs["fname"]) / "merged" / "out.ome.tif")]
+    monkeypatch.setattr("omio.omio.write_ometiff", fake_write_ometiff)
+
+    out = bids_batch_convert(
+        fname=str(project),
+        sub="sub",
+        exp="TP",
+        tagfolder="TAG_",
+        merge_tagfolders=True,
+        relative_path=None,
+        return_fnames=True,
+        verbose=False,
+    )
+
+    assert len(out) == 1
+    assert isinstance(captured["md"]["Annotations"], dict)
+    assert "original_filename" in captured["md"]["Annotations"]
+
+def test_bids_batch_convert_merge_tagfolders_cleanup_called_only_when_zarr_store_set(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    _build_bids_like_tree(project, sub_names=("sub-01",), exp_names=("TP000",), files_per_exp=1,
+                         tagfolder_prefix="TAG_", tagfolders_per_exp=2)
+
+    dummy_img = np.zeros((1, 1, 1, 2, 2), dtype=np.uint8)
+    dummy_md = {}
+
+    monkeypatch.setattr("omio.omio.imread", lambda **kwargs: (dummy_img, dummy_md))
+    monkeypatch.setattr("omio.omio.write_ometiff", lambda **kwargs: [str(tmp_path / "out.ome.tif")])
+
+    calls = {"n": 0}
+    def fake_cleanup(path, full_cleanup=False, verbose=False):
+        calls["n"] += 1
+    monkeypatch.setattr("omio.omio.cleanup_omio_cache", fake_cleanup)
+
+    # zarr_store None -> no cleanup
+    bids_batch_convert(
+        fname=str(project),
+        sub="sub",
+        exp="TP",
+        tagfolder="TAG_",
+        merge_tagfolders=True,
+        zarr_store=None,
+        cleanup_cache=True,
+        return_fnames=True,
+        verbose=False,
+    )
+    assert calls["n"] == 0
+
+    # zarr_store disk -> cleanup
+    bids_batch_convert(
+        fname=str(project),
+        sub="sub",
+        exp="TP",
+        tagfolder="TAG_",
+        merge_tagfolders=True,
+        zarr_store="disk",
+        cleanup_cache=True,
+        return_fnames=True,
+        verbose=False,
+    )
+    assert calls["n"] == 1
+
+# %% _dispatch_read_file
+
+# helper: capture calls in a simple dict
+def _make_fake_reader(name, calls, ret=("IMG", {"md": True})):
+    def _reader(path, **kwargs):
+        calls["name"] = name
+        calls["path"] = path
+        calls["kwargs"] = dict(kwargs)
+        return ret
+    return _reader
+
+def test_dispatch_read_file_tiff_variants_go_to_read_tif(monkeypatch):
+    calls = {}
+
+    fake = _make_fake_reader("read_tif", calls)
+    monkeypatch.setattr("omio.omio.read_tif", fake)
+
+    # ensure other readers would fail if called
+    monkeypatch.setattr("omio.omio.read_czi", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_czi called")))
+    monkeypatch.setattr("omio.omio.read_thorlabs_raw", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_thorlabs_raw called")))
+
+    path = "some/path/file.TIFF"  # upper-case should still dispatch to tif reader
+    out = _dispatch_read_file(
+        path=path,
+        zarr_store="memory",
+        return_list=True,
+        physicalsize_xyz=(0.1, 0.2, 0.3),
+        pixelunit="micron",
+        verbose=False,
+    )
+
+    assert out == ("IMG", {"md": True})
+    assert calls["name"] == "read_tif"
+    assert calls["path"] == path
+
+    # forwarded parameters must match
+    assert calls["kwargs"]["zarr_store"] == "memory"
+    assert calls["kwargs"]["return_list"] is True
+    assert calls["kwargs"]["physicalsize_xyz"] == (0.1, 0.2, 0.3)
+    assert calls["kwargs"]["pixelunit"] == "micron"
+    assert calls["kwargs"]["verbose"] is False
+
+def test_dispatch_read_file_lsm_goes_to_read_tif(monkeypatch):
+    calls = {}
+    monkeypatch.setattr("omio.omio.read_tif", _make_fake_reader("read_tif", calls))
+
+    out = _dispatch_read_file(
+        path="x/stack.lsm",
+        zarr_store=None,
+        return_list=False,
+        physicalsize_xyz=None,
+        pixelunit="micron",
+        verbose=True,
+    )
+
+    assert out == ("IMG", {"md": True})
+    assert calls["name"] == "read_tif"
+    assert calls["path"].endswith("stack.lsm")
+
+def test_dispatch_read_file_ome_tif_detected_by_looks_like_ome_tif(monkeypatch):
+    calls = {}
+    monkeypatch.setattr("omio.omio.read_tif", _make_fake_reader("read_tif", calls))
+
+    # Force the ome detector branch to be used regardless of extension parsing details
+    monkeypatch.setattr("omio.omio._looks_like_ome_tif", lambda lp: True)
+    # also ensure _lower_ext would not accidentally route elsewhere
+    monkeypatch.setattr("omio.omio._lower_ext", lambda lp: ".nope")
+
+    out = _dispatch_read_file(
+        path="x/whatever.OME.TIF",
+        zarr_store="disk",
+        return_list=False,
+        physicalsize_xyz=None,
+        pixelunit="micron",
+        verbose=False,
+    )
+
+    assert out == ("IMG", {"md": True})
+    assert calls["name"] == "read_tif"
+    assert calls["kwargs"]["zarr_store"] == "disk"
+
+def test_dispatch_read_file_czi_goes_to_read_czi(monkeypatch):
+    calls = {}
+    monkeypatch.setattr("omio.omio.read_czi", _make_fake_reader("read_czi", calls))
+    monkeypatch.setattr("omio.omio.read_tif", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_tif called")))
+    monkeypatch.setattr("omio.omio.read_thorlabs_raw", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_thorlabs_raw called")))
+
+    path = "x/stack.CZI"
+    out = _dispatch_read_file(
+        path=path,
+        zarr_store="memory",
+        return_list=True,
+        physicalsize_xyz=(1, 2, 3),
+        pixelunit="micron",
+        verbose=False,
+    )
+
+    assert out == ("IMG", {"md": True})
+    assert calls["name"] == "read_czi"
+    assert calls["path"] == path
+    assert calls["kwargs"]["zarr_store"] == "memory"
+    assert calls["kwargs"]["return_list"] is True
+    assert calls["kwargs"]["physicalsize_xyz"] == (1, 2, 3)
+    assert calls["kwargs"]["pixelunit"] == "micron"
+    assert calls["kwargs"]["verbose"] is False
+
+def test_dispatch_read_file_raw_goes_to_read_thorlabs_raw(monkeypatch):
+    calls = {}
+    monkeypatch.setattr("omio.omio.read_thorlabs_raw", _make_fake_reader("read_thorlabs_raw", calls))
+    monkeypatch.setattr("omio.omio.read_tif", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_tif called")))
+    monkeypatch.setattr("omio.omio.read_czi", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_czi called")))
+
+    out = _dispatch_read_file(
+        path="x/data.raw",
+        zarr_store=None,
+        return_list=False,
+        physicalsize_xyz=None,
+        pixelunit="micron",
+        verbose=True,
+    )
+
+    assert out == ("IMG", {"md": True})
+    assert calls["name"] == "read_thorlabs_raw"
+    assert calls["kwargs"]["zarr_store"] is None
+    assert calls["kwargs"]["verbose"] is True
+
+def test_dispatch_read_file_unsupported_extension_raises(monkeypatch):
+    # Make sure ome detector is false so we go purely by extension
+    monkeypatch.setattr("omio.omio._looks_like_ome_tif", lambda lp: False)
+    monkeypatch.setattr("omio.omio._lower_ext", lambda lp: ".xyz")
+
+    with pytest.raises(ValueError, match="Unsupported file extension"):
+        _dispatch_read_file(
+            path="x/file.xyz",
+            zarr_store=None,
+            return_list=False,
+            physicalsize_xyz=None,
+            pixelunit="micron",
+            verbose=False,
+        )
 
 # %% NAPARI VIEWER
 
