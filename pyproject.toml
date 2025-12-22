@@ -47,7 +47,7 @@ dev = [
 
 
 [tool.pytest.ini_options]
-addopts = "-p no:napari --cov=omio --cov-branch --cov-report=term --cov-report=xml"
+addopts = "--cov=omio --cov-branch --cov-report=term --cov-report=xml"
 testpaths = ["tests"]
 filterwarnings = [
     "ignore:Pickle, copy, and deepcopy support will be removed from itertools in Python 3.14\\.:DeprecationWarning",
