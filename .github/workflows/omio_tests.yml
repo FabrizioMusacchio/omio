@@ -27,11 +27,17 @@ jobs:
           pip install .
           pip install pytest pytest-cov
 
+      - name: Debug OMIO import
+        run: |
+          source "$(conda info --base)/etc/profile.d/conda.sh"
+          conda activate omio
+          python -c "import omio; print('omio imported from:', omio.__file__)"
+
       - name: Run tests
         run: |
           source "$(conda info --base)/etc/profile.d/conda.sh"
           conda activate omio
-          pytest --cov=omio --cov-branch --cov-report=xml
+          pytest --cov=omio --cov-branch --cov-report=term --cov-report=xml
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
