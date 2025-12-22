@@ -1,0 +1,38 @@
+name: Run Python tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Conda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: "3.12"
+          environment-name: omio
+          activate-environment: omio
+          auto-update-conda: true
+          miniforge-variant: Miniforge3
+
+      - name: Install OMIO and test dependencies
+        run: |
+          source "$(conda info --base)/etc/profile.d/conda.sh"
+          conda activate omio
+          pip install .
+          pip install pytest pytest-cov
+
+      - name: Run tests
+        run: |
+          source "$(conda info --base)/etc/profile.d/conda.sh"
+          conda activate omio
+          pytest --cov=omio --cov-branch --cov-report=xml
+
+      # - name: Upload coverage reports to Codecov
+      #   uses: codecov/codecov-action@v5
+      #   with:
+      #     token: ${{ secrets.CODECOV_TOKEN }}
