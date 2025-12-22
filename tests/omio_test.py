@@ -29,11 +29,21 @@ from omio.omio import (
     _squeeze_zarr_to_napari_cache,
     _squeeze_zarr_to_napari_cache_dask,
     _single_image_open_in_napari,
-    open_in_napari
+    open_in_napari,
+    _batch_correct_for_OME_axes_order,
+    _standardize_imagej_metadata,
+    _standardize_lsm_metadata,
+    _copy_to_zarr_in_xy_slices,
+    _copy_into_zarr_chunk_aligned,
+    _estimate_compressed_size,
+    _check_bigtiff,
+    _estimate_compressed_size,
+    _copy_into_zarr_with_padding
 )
 
 import os
 import re
+import copy
 from pathlib import Path
 import numpy as np
 import pytest
@@ -41,6 +51,7 @@ import tifffile
 import zarr
 import yaml
 import warnings
+import zlib
 
 import dask.array as da
 # %% TEST HELLO WORLD
@@ -54,6 +65,765 @@ def test_hello_world_prints_version(capsys):
 def test_version_is_nonempty_string():
     assert isinstance(version, str)
     assert len(version) > 0
+
+# %% HELPER FUNCTIONS
+
+# _batch_correct_for_OME_axes_order tests:
+def test_batch_correct_length_mismatch_returns_inputs_unchanged(capsys):
+    images = [np.zeros((5, 5))]
+    metadatas = []
+
+    out_images, out_mds = _batch_correct_for_OME_axes_order(
+        images,
+        metadatas,
+        verbose=True
+    )
+
+    assert out_images is images
+    assert out_mds is metadatas
+
+    captured = capsys.readouterr()
+    assert "different lengths" in captured.out
+
+def test_batch_correct_single_image_calls_corrector(monkeypatch):
+    images = [np.zeros((2, 3))]
+    metadatas = [{"axes": "YX"}]
+
+    calls = []
+
+    def fake_correct(image, md, memap_large_file=False, verbose=True):
+        calls.append((image, md, memap_large_file, verbose))
+        return image, image.shape, "TZCYX"
+
+    monkeypatch.setattr(
+        "omio.omio._correct_for_OME_axes_order",
+        fake_correct
+    )
+
+    out_images, out_mds = _batch_correct_for_OME_axes_order(
+        images,
+        metadatas,
+        memap_large_file=True,
+        verbose=False
+    )
+
+    assert len(calls) == 1
+    assert calls[0][2] is True          # memap_large_file forwarded
+    assert calls[0][3] is False         # verbose forwarded
+
+    assert out_images is images
+    assert out_mds is metadatas
+    assert metadatas[0]["axes"] == "TZCYX"
+    assert metadatas[0]["shape"] == (2, 3)
+
+def test_batch_correct_multiple_images(monkeypatch):
+    images = [
+        np.zeros((2, 3)),
+        np.zeros((4, 5)),
+    ]
+    metadatas = [
+        {"axes": "YX"},
+        {"axes": "ZYX"},
+    ]
+
+    def fake_correct(image, md, memap_large_file=False, verbose=True):
+        new_axes = "TZCYX"
+        return image, image.shape, new_axes
+
+    monkeypatch.setattr(
+        "omio.omio._correct_for_OME_axes_order",
+        fake_correct
+    )
+
+    out_images, out_mds = _batch_correct_for_OME_axes_order(images, metadatas)
+
+    assert len(out_images) == 2
+    for img, md in zip(out_images, out_mds):
+        assert md["axes"] == "TZCYX"
+        assert md["shape"] == img.shape
+
+def test_batch_correct_accepts_zarr_arrays(monkeypatch):
+    store = zarr.storage.MemoryStore()
+    z = zarr.open(store, mode="w", shape=(3, 4), dtype=np.uint8)
+
+    images = [z]
+    metadatas = [{"axes": "YX"}]
+
+    def fake_correct(image, md, memap_large_file=False, verbose=True):
+        assert isinstance(image, zarr.core.array.Array)
+        return image, image.shape, "TZCYX"
+
+    monkeypatch.setattr(
+        "omio.omio._correct_for_OME_axes_order",
+        fake_correct
+    )
+
+    out_images, out_mds = _batch_correct_for_OME_axes_order(images, metadatas)
+
+    assert isinstance(out_images[0], zarr.core.array.Array)
+    assert out_mds[0]["axes"] == "TZCYX"
+
+def test_batch_correct_verbose_false_suppresses_output(monkeypatch, capsys):
+    images = [np.zeros((2, 2))]
+    metadatas = [{"axes": "YX"}]
+
+    monkeypatch.setattr(
+        "omio.omio._correct_for_OME_axes_order",
+        lambda image, md, memap_large_file=False, verbose=True: (image, image.shape, "TZCYX")
+    )
+
+    _batch_correct_for_OME_axes_order(images, metadatas, verbose=False)
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+
+# _standardize_imagej_metadata tests:
+def test_standardize_imagej_metadata_maps_known_keys_and_preserves_unknown():
+    md_in = {
+        "sizex": 7,
+        "sizey": 5,
+        "sizec": 2,
+        "physicalsizex": 0.12,
+        "physicalsizey": 0.34,
+        "timeincrement": 0.5,
+        "timeincrementunit": "s",
+        "some_weird_key": "keep_me",
+    }
+
+    md_out = _standardize_imagej_metadata(md_in)
+
+    assert md_out["SizeX"] == 7
+    assert md_out["SizeY"] == 5
+    assert md_out["SizeC"] == 2
+    assert md_out["PhysicalSizeX"] == 0.12
+    assert md_out["PhysicalSizeY"] == 0.34
+    assert md_out["TimeIncrement"] == 0.5
+    assert md_out["TimeIncrementUnit"] == "s"
+
+    assert md_out["some_weird_key"] == "keep_me"
+
+def test_standardize_imagej_metadata_does_not_parse_info_if_physicalsizex_present():
+    md_in = {
+        "physicalsizex": 1.23,
+        "Info": "Scaling|Distance|Id #1 = X\nScaling|Distance|Value #1 = 9.99\nScaling|Distance|DefaultUnitFormat #1 = m\n",
+    }
+
+    md_out = _standardize_imagej_metadata(md_in)
+
+    assert md_out["PhysicalSizeX"] == 1.23
+
+def test_standardize_imagej_metadata_parses_info_and_sets_xyz_sizes():
+    info = "\n".join(
+        [
+            "SomeOtherKey = 123",
+            "Scaling|Distance|Id #1 = X",
+            "Scaling|Distance|Value #1 = 1.135E-07",
+            "Scaling|Distance|DefaultUnitFormat #1 = µm",
+            "Scaling|Distance|Id #2 = Y",
+            "Scaling|Distance|Value #2 = 2.0E-07",
+            "Scaling|Distance|DefaultUnitFormat #2 = µm",
+            "Scaling|Distance|Id #3 = Z",
+            "Scaling|Distance|Value #3 = 5.0E-07",
+            "Scaling|Distance|DefaultUnitFormat #3 = µm",
+        ]
+    )
+
+    md_in = {
+        "Info": info,
+    }
+
+    md_out = _standardize_imagej_metadata(md_in)
+
+    assert "PhysicalSizeX" in md_out
+    assert "PhysicalSizeY" in md_out
+    assert "PhysicalSizeZ" in md_out
+
+    assert md_out["PhysicalSizeX"] == pytest.approx(1.135e-07 * 1e6)
+    assert md_out["PhysicalSizeY"] == pytest.approx(2.0e-07 * 1e6)
+    assert md_out["PhysicalSizeZ"] == pytest.approx(5.0e-07 * 1e6)
+
+def test_standardize_imagej_metadata_parses_info_partially_only_sets_present_axes():
+    info = "\n".join(
+        [
+            "Scaling|Distance|Id #1 = X",
+            "Scaling|Distance|Value #1 = 1.0E-06",
+            "Scaling|Distance|DefaultUnitFormat #1 = µm",
+            "Scaling|Distance|Id #2 = Y",
+            "Scaling|Distance|Value #2 = 2.0E-06",
+            "Scaling|Distance|DefaultUnitFormat #2 = µm",
+        ]
+    )
+
+    md_in = {"Info": info}
+    md_out = _standardize_imagej_metadata(md_in)
+
+    assert md_out["PhysicalSizeX"] == pytest.approx(1.0e-06 * 1e6)
+    assert md_out["PhysicalSizeY"] == pytest.approx(2.0e-06 * 1e6)
+    assert "PhysicalSizeZ" not in md_out
+
+def test_standardize_imagej_metadata_spacing_fallback_sets_physicalsizez_if_missing():
+    md_in = {
+        "spacing": 3.21,
+        "sizex": 10,
+    }
+    md_out = _standardize_imagej_metadata(md_in)
+
+    assert md_out["SizeX"] == 10
+    assert md_out["PhysicalSizeZ"] == 3.21
+
+def test_standardize_imagej_metadata_info_parse_failure_prints_and_leaves_sizes_unset(capsys):
+    info = "\n".join(
+        [
+            "Scaling|Distance|Id #1 = X",
+            "Scaling|Distance|Value #1 = NOT_A_FLOAT",
+            "Scaling|Distance|DefaultUnitFormat #1 = µm",
+        ]
+    )
+    md_in = {"Info": info}
+
+    md_out = _standardize_imagej_metadata(md_in)
+
+    captured = capsys.readouterr()
+    assert "Error while extracting PhysicalSize from Info" in captured.out
+
+    assert "PhysicalSizeX" not in md_out
+    assert "PhysicalSizeY" not in md_out
+    assert "PhysicalSizeZ" not in md_out
+
+# _standardize_lsm_metadata tests:
+def test_standardize_lsm_metadata_maps_known_keys_and_preserves_unknown():
+    md_in = {
+        "DimensionX": 512,
+        "DimensionY": 256,
+        "DimensionZ": 12,
+        "DimensionChannels": 3,
+        "DimensionTime": 7,
+        "VoxelSizeX": 0.12,
+        "VoxelSizeY": 0.34,
+        "VoxelSizeZ": 1.5,
+        "TimeIntervall": 0.25,
+        "SomeVendorField": "keep_me",
+    }
+
+    md_out = _standardize_lsm_metadata(md_in)
+
+    assert md_out["SizeX"] == 512
+    assert md_out["SizeY"] == 256
+    assert md_out["SizeZ"] == 12
+    assert md_out["SizeC"] == 3
+    assert md_out["SizeT"] == 7
+
+    assert md_out["PhysicalSizeX"] == 0.12
+    assert md_out["PhysicalSizeY"] == 0.34
+    assert md_out["PhysicalSizeZ"] == 1.5
+
+    assert md_out["TimeIncrement"] == 0.25
+
+    # unknown keys are preserved unchanged
+    assert md_out["SomeVendorField"] == "keep_me"
+
+def test_standardize_lsm_metadata_does_not_modify_input_dict():
+    md_in = {
+        "DimensionX": 10,
+        "VoxelSizeX": 0.5,
+        "SomeKey": 123,
+    }
+    md_in_copy = copy.deepcopy(md_in)
+
+    _ = _standardize_lsm_metadata(md_in)
+
+    assert md_in == md_in_copy
+
+def test_standardize_lsm_metadata_allows_non_numeric_values_and_keeps_them():
+    md_in = {
+        "DimensionX": "512",           # sometimes strings happen
+        "TimeIntervall": "0.1",
+        "VoxelSizeZ": None,
+        "CustomBlock": {"a": 1},
+    }
+
+    md_out = _standardize_lsm_metadata(md_in)
+
+    assert md_out["SizeX"] == "512"
+    assert md_out["TimeIncrement"] == "0.1"
+    assert md_out["PhysicalSizeZ"] is None
+    assert md_out["CustomBlock"] == {"a": 1}
+
+# _standardize_lsm_metadata tests:
+def test_copy_to_zarr_in_xy_slices_trivial_2d_copies_all():
+    src = (np.arange(6 * 7).reshape(6, 7)).astype(np.uint16)
+
+    store = zarr.storage.MemoryStore()
+    dst = zarr.open(store=store, mode="w", shape=src.shape, dtype=src.dtype, chunks=src.shape)
+
+    _copy_to_zarr_in_xy_slices(src, dst, desc="test")
+
+    out = np.asarray(dst)
+    assert out.shape == src.shape
+    assert np.array_equal(out, src)
+
+def test_copy_to_zarr_in_xy_slices_streams_outer_dims_3d():
+    src = np.random.randint(0, 255, size=(4, 6, 7), dtype=np.uint8)  # outer=(4,), plane=(6,7)
+
+    store = zarr.storage.MemoryStore()
+    dst = zarr.open(store=store, mode="w", shape=src.shape, dtype=src.dtype, chunks=(1, 6, 7))
+
+    _copy_to_zarr_in_xy_slices(src, dst, desc="test")
+
+    out = np.asarray(dst)
+    assert out.shape == src.shape
+    assert np.array_equal(out, src)
+
+def test_copy_to_zarr_in_xy_slices_streams_outer_dims_5d():
+    src = np.random.randn(2, 3, 1, 8, 9).astype(np.float32)  # outer=(2,3,1), plane=(8,9)
+
+    store = zarr.storage.MemoryStore()
+    dst = zarr.open(store=store, mode="w", shape=src.shape, dtype=src.dtype, chunks=(1, 1, 1, 8, 9))
+
+    _copy_to_zarr_in_xy_slices(src, dst, desc="test")
+
+    out = np.asarray(dst)
+    assert out.shape == src.shape
+    assert np.array_equal(out, src)
+
+def test_copy_to_zarr_in_xy_slices_raises_on_shape_mismatch():
+    src = np.zeros((2, 3, 4), dtype=np.uint8)
+
+    store = zarr.storage.MemoryStore()
+    dst = zarr.open(store=store, mode="w", shape=(2, 3, 5), dtype=src.dtype, chunks=(1, 3, 5))
+
+    # Zarr assignment should raise due to incompatible slice shapes
+    with pytest.raises(Exception):
+        _copy_to_zarr_in_xy_slices(src, dst, desc="test")
+
+# _copy_into_zarr_chunk_aligned tests:
+def _make_zarr(shape, dtype, chunks):
+    store = zarr.storage.MemoryStore()
+    return zarr.open(store=store, mode="w", shape=shape, dtype=dtype, chunks=chunks)
+
+def test_copy_into_zarr_chunk_aligned_writes_with_offset_and_chunk_blocks_numpy_src():
+    # merge axis: T (idx 0)
+    axis_idx = 0
+
+    # source has n=5 along T, chunk_len=2 -> blocks: 2,2,1
+    img = np.random.randint(0, 256, size=(5, 1, 2, 4, 4), dtype=np.uint8)
+
+    # output larger along T, with chunking along T=2
+    z_out = _make_zarr(shape=(10, 1, 2, 4, 4), dtype=img.dtype, chunks=(2, 1, 2, 4, 4))
+    z_out[...] = 0
+
+    out_start = 3
+    _copy_into_zarr_chunk_aligned(z_out, img, out_start=out_start, axis_idx=axis_idx)
+
+    out = np.asarray(z_out)
+    # written region matches
+    assert np.array_equal(out[out_start:out_start + 5, ...], img)
+    # outside region stays zero
+    assert np.all(out[:out_start, ...] == 0)
+    assert np.all(out[out_start + 5:, ...] == 0)
+
+def test_copy_into_zarr_chunk_aligned_works_with_zarr_source():
+    axis_idx = 0
+
+    src_np = np.random.randint(0, 256, size=(4, 1, 1, 6, 7), dtype=np.uint8)
+    z_src = _make_zarr(shape=src_np.shape, dtype=src_np.dtype, chunks=(2, 1, 1, 6, 7))
+    z_src[...] = src_np
+
+    z_out = _make_zarr(shape=(9, 1, 1, 6, 7), dtype=src_np.dtype, chunks=(3, 1, 1, 6, 7))
+    z_out[...] = 0
+
+    out_start = 2
+    _copy_into_zarr_chunk_aligned(z_out, z_src, out_start=out_start, axis_idx=axis_idx)
+
+    out = np.asarray(z_out)
+    assert np.array_equal(out[out_start:out_start + 4, ...], src_np)
+
+def test_copy_into_zarr_chunk_aligned_fallback_when_chunks_missing_or_invalid(monkeypatch):
+    axis_idx = 0
+    img = np.random.randint(0, 256, size=(3, 1, 1, 5, 5), dtype=np.uint8)
+
+    z_out = _make_zarr(shape=(6, 1, 1, 5, 5), dtype=img.dtype, chunks=(2, 1, 1, 5, 5))
+    z_out[...] = 0
+
+    # Force getattr(z_out, "chunks", None) -> None so code uses fallback (one block)
+    monkeypatch.setattr(type(z_out), "chunks", property(lambda self: None))
+
+    out_start = 1
+    _copy_into_zarr_chunk_aligned(z_out, img, out_start=out_start, axis_idx=axis_idx)
+
+    out = np.asarray(z_out)
+    assert np.array_equal(out[out_start:out_start + 3, ...], img)
+
+# _estimate_compressed_size tests:
+def _make_zarr_memory(arr: np.ndarray, chunks=None):
+    store = zarr.storage.MemoryStore()
+    z = zarr.open(
+        store=store,
+        mode="w",
+        shape=arr.shape,
+        dtype=arr.dtype,
+        chunks=chunks if chunks is not None else arr.shape,
+    )
+    z[...] = arr
+    return z
+
+def test_estimate_compressed_size_numpy_returns_positive_float():
+    img = np.zeros((10, 11, 12), dtype=np.uint16)
+    est = _estimate_compressed_size(img, sample_fraction=0.001, compression_level=3)
+
+    assert isinstance(est, float)
+    assert est > 0.0
+
+def test_estimate_compressed_size_numpy_sample_fraction_min_one_element():
+    # sample_fraction so small that int(prod * frac) would be 0 without max(1, ...)
+    img = np.arange(100, dtype=np.uint8).reshape(10, 10)
+    est = _estimate_compressed_size(img, sample_fraction=0.0, compression_level=3)
+
+    assert isinstance(est, float)
+    assert est > 0.0
+
+def test_estimate_compressed_size_numpy_compression_level_effect_for_highly_compressible_data():
+    # For all zeros, higher compression level should not produce a larger compressed sample
+    img = np.zeros((50, 50), dtype=np.uint8)
+
+    est_low = _estimate_compressed_size(img, sample_fraction=0.05, compression_level=1)
+    est_high = _estimate_compressed_size(img, sample_fraction=0.05, compression_level=9)
+
+    assert est_high <= est_low
+
+def test_estimate_compressed_size_numpy_invalid_compression_level_raises():
+    img = np.zeros((10, 10), dtype=np.uint8)
+
+    with pytest.raises(zlib.error):
+        _estimate_compressed_size(img, sample_fraction=0.1, compression_level=99)
+
+def test_estimate_compressed_size_zarr_returns_positive_float():
+    img = np.zeros((2, 3, 20, 21), dtype=np.uint8)  # e.g. T,C,Y,X
+    z = _make_zarr_memory(img, chunks=(1, 1, 20, 21))
+
+    est = _estimate_compressed_size(z, sample_fraction=0.001, compression_level=3)
+
+    assert isinstance(est, float)
+    assert est > 0.0
+
+def test_estimate_compressed_size_zarr_path_ignores_sample_fraction_argument_semantically():
+    # Implementation uses one YX plane for Zarr regardless of sample_fraction.
+    # We only test that it runs and returns a stable type/value for different fractions.
+    img = np.zeros((2, 3, 16, 16), dtype=np.uint8)
+    z = _make_zarr_memory(img, chunks=(1, 1, 16, 16))
+
+    est_a = _estimate_compressed_size(z, sample_fraction=1e-6, compression_level=3)
+    est_b = _estimate_compressed_size(z, sample_fraction=0.9, compression_level=3)
+
+    assert isinstance(est_a, float)
+    assert isinstance(est_b, float)
+    assert est_a > 0.0
+    assert est_b > 0.0
+
+def test_estimate_compressed_size_zarr_compression_level_effect_for_highly_compressible_data():
+    img = np.zeros((2, 1, 32, 32), dtype=np.uint8)
+    z = _make_zarr_memory(img, chunks=(1, 1, 32, 32))
+
+    est_low = _estimate_compressed_size(z, compression_level=1)
+    est_high = _estimate_compressed_size(z, compression_level=9)
+
+    assert est_high <= est_low
+
+# _check_bigtiff tests:
+def test_check_bigtiff_small_array_returns_false():
+    img = np.zeros((10, 10), dtype=np.uint8)  # 100 bytes
+
+    use_bigtiff = _check_bigtiff(img)
+
+    assert use_bigtiff is False
+    
+class DummyImage:
+    def __init__(self, nbytes):
+        self.nbytes = nbytes
+
+def test_check_bigtiff_large_uncompressed_requires_bigtiff(monkeypatch):
+    class DummyImage:
+        def __init__(self, nbytes):
+            self.nbytes = nbytes
+
+    img = DummyImage(nbytes=2**32)
+
+    limit = 2**32 - 2**25
+
+    def fake_estimate(image, sample_fraction=0.001, compression_level=3):
+        return limit + 1  # bleibt über Limit
+
+    monkeypatch.setattr("omio.omio._estimate_compressed_size", fake_estimate)
+
+    use_bigtiff = _check_bigtiff(img, compression_level=3)
+
+    assert use_bigtiff is True
+    
+def test_check_bigtiff_large_but_compressible_resets_flag(monkeypatch):
+    class DummyImage:
+        def __init__(self, nbytes):
+            self.nbytes = nbytes
+
+    img = DummyImage(nbytes=2**32)
+
+    def fake_estimate(image, sample_fraction=0.001, compression_level=3):
+        return 1024  # weit unter Limit
+
+    monkeypatch.setattr("omio.omio._estimate_compressed_size", fake_estimate)
+
+    use_bigtiff = _check_bigtiff(img, compression_level=3)
+
+    assert use_bigtiff is False
+
+def test_check_bigtiff_invalid_compression_level_propagates(monkeypatch):
+    class DummyImage:
+        def __init__(self, nbytes):
+            self.nbytes = nbytes
+
+    img = DummyImage(nbytes=2**32)
+
+    def fake_estimate(image, sample_fraction=0.001, compression_level=99):
+        raise zlib.error("Bad compression level")
+
+    monkeypatch.setattr("omio.omio._estimate_compressed_size", fake_estimate)
+
+    with pytest.raises(zlib.error):
+        _check_bigtiff(img, compression_level=99)
+
+# _estimate_compressed_size tests:
+def _make_zarr_array(data: np.ndarray, chunks=None):
+    store = zarr.storage.MemoryStore()
+    z = zarr.open(
+        store=store,
+        mode="w",
+        shape=data.shape,
+        dtype=data.dtype,
+        chunks=chunks if chunks is not None else data.shape,
+    )
+    z[...] = data
+    return z
+
+def test_estimate_compressed_size_numpy_returns_positive_float():
+    img = np.random.randint(0, 256, (50, 60), dtype=np.uint8)
+    est = _estimate_compressed_size(img, sample_fraction=0.1, compression_level=3)
+
+    assert isinstance(est, (float, np.floating))
+    assert est > 0
+
+def test_estimate_compressed_size_numpy_sample_fraction_zero_still_works():
+    # sample_size should clamp to at least 1 element
+    img = np.random.randint(0, 256, (10, 10), dtype=np.uint8)
+    est = _estimate_compressed_size(img, sample_fraction=0.0, compression_level=3)
+
+    assert est > 0
+
+def test_estimate_compressed_size_numpy_all_zeros_compresses_strongly():
+    img = np.zeros((200, 200), dtype=np.uint8)
+    est = _estimate_compressed_size(img, sample_fraction=0.1, compression_level=3)
+
+    # should be clearly smaller than raw in most cases
+    assert est < img.nbytes
+
+def test_estimate_compressed_size_numpy_invalid_compression_level_raises_zlib_error():
+    img = np.zeros((10, 10), dtype=np.uint8)
+
+    with pytest.raises(zlib.error):
+        _estimate_compressed_size(img, sample_fraction=0.1, compression_level=99)
+
+def test_estimate_compressed_size_zarr_returns_positive_float():
+    data = np.random.randint(0, 256, (2, 3, 20, 21), dtype=np.uint8)
+    z = _make_zarr_array(data, chunks=(1, 1, 20, 21))
+
+    est = _estimate_compressed_size(z, compression_level=3)
+
+    assert isinstance(est, (float, np.floating))
+    assert est > 0
+
+def test_estimate_compressed_size_zarr_uses_single_yx_plane_and_matches_numpy_formula():
+    # This test checks the exact sampling logic used for Zarr inputs:
+    # slicer = [0]*(ndim-2) + [slice(None), slice(None)]
+    # So for (T, C, Y, X) it samples [0,0,:,:]
+    data = np.random.randint(0, 256, (4, 2, 16, 18), dtype=np.uint8)
+    z = _make_zarr_array(data, chunks=(1, 1, 16, 18))
+
+    est = _estimate_compressed_size(z, compression_level=3)
+
+    sample = np.asarray(data[0, 0, :, :]).ravel()
+    compressed = zlib.compress(sample.tobytes(), level=3)
+    ratio = len(compressed) / sample.nbytes
+    expected = z.nbytes * ratio
+
+    assert est == pytest.approx(expected)
+
+def test_estimate_compressed_size_zarr_invalid_compression_level_raises_zlib_error():
+    data = np.random.randint(0, 256, (2, 2, 8, 9), dtype=np.uint8)
+    z = _make_zarr_array(data)
+
+    with pytest.raises(zlib.error):
+        _estimate_compressed_size(z, compression_level=99)
+
+# _copy_into_zarr_with_padding tests:
+def _make_zarr(shape, dtype=np.uint8, chunks=None, fill=0):
+    store = zarr.storage.MemoryStore()
+    z = zarr.open(
+        store=store,
+        mode="w",
+        shape=shape,
+        dtype=dtype,
+        chunks=chunks if chunks is not None else shape,
+    )
+    if fill != 0:
+        z[...] = fill
+    return z
+
+def _make_zarr_from_numpy(arr: np.ndarray, chunks=None):
+    z = _make_zarr(arr.shape, dtype=arr.dtype, chunks=chunks)
+    z[...] = arr
+    return z
+
+def test_copy_into_zarr_with_padding_places_block_and_keeps_padding_zeros_axis0_merge():
+    # merge axis: T (axis 0)
+    axis_idx = 0
+
+    # src has smaller C and smaller X than target
+    src = np.ones((2, 1, 2, 3, 4), dtype=np.uint8) * 7
+    z_out = _make_zarr(shape=(5, 1, 4, 3, 6), dtype=np.uint8, chunks=(2, 1, 4, 3, 3), fill=0)
+
+    out_start = 1
+    target_nonmerge_shape = z_out.shape  # interface arg, not used internally
+
+    _copy_into_zarr_with_padding(z_out, src, out_start=out_start, axis_idx=axis_idx,
+                                 target_nonmerge_shape=target_nonmerge_shape)
+
+    out = np.asarray(z_out)
+
+    # region that must be written: T in [1:3], Z full (1), C [0:2], Y full (3), X [0:4]
+    written = out[1:3, :, 0:2, :, 0:4]
+    assert np.all(written == 7)
+
+    # padding in C beyond src (C=2..3) must remain zero in the written T range
+    assert np.all(out[1:3, :, 2:4, :, :] == 0)
+
+    # padding in X beyond src (X=4..5) must remain zero in the written T range and valid C
+    assert np.all(out[1:3, :, 0:2, :, 4:6] == 0)
+
+    # regions outside written T range must remain zero everywhere
+    assert np.all(out[0, ...] == 0)
+    assert np.all(out[3:, ...] == 0)
+
+def test_copy_into_zarr_with_padding_merge_axis2_channel_axis():
+    # merge axis: C (axis 2)
+    axis_idx = 2
+
+    src = np.ones((1, 1, 3, 4, 5), dtype=np.uint8) * 9  # C=3
+    z_out = _make_zarr(shape=(1, 1, 8, 4, 7), dtype=np.uint8, chunks=(1, 1, 2, 4, 7), fill=0)
+
+    out_start = 2  # place into C indices [2:5]
+    _copy_into_zarr_with_padding(z_out, src, out_start=out_start, axis_idx=axis_idx,
+                                 target_nonmerge_shape=z_out.shape)
+
+    out = np.asarray(z_out)
+
+    # written region in C
+    assert np.all(out[:, :, 2:5, :, 0:5] == 9)
+
+    # padding in X beyond src stays zero within written C
+    assert np.all(out[:, :, 2:5, :, 5:7] == 0)
+
+    # padding in C outside written region stays zero
+    assert np.all(out[:, :, 0:2, :, :] == 0)
+    assert np.all(out[:, :, 5:8, :, :] == 0)
+
+def test_copy_into_zarr_with_padding_accepts_zarr_source():
+    axis_idx = 0
+    src_np = (np.arange(2 * 1 * 1 * 3 * 4, dtype=np.uint16).reshape(2, 1, 1, 3, 4))
+    src = _make_zarr_from_numpy(src_np, chunks=(1, 1, 1, 3, 4))
+
+    z_out = _make_zarr(shape=(4, 1, 1, 3, 6), dtype=src_np.dtype, chunks=(2, 1, 1, 3, 3), fill=0)
+
+    _copy_into_zarr_with_padding(z_out, src, out_start=1, axis_idx=axis_idx,
+                                 target_nonmerge_shape=z_out.shape)
+
+    out = np.asarray(z_out)
+
+    # exact values copied into valid region
+    assert np.array_equal(out[1:3, :, :, :, 0:4], src_np)
+
+    # padding in X remains zero
+    assert np.all(out[1:3, :, :, :, 4:6] == 0)
+
+def test_copy_into_zarr_with_padding_chunk_fallback_works_when_chunks_missing():
+    # z_out.chunks could be None or invalid, the function falls back to chunk_len = n
+    axis_idx = 0
+
+    src = np.ones((3, 1, 1, 2, 2), dtype=np.uint8) * 4
+
+    store = zarr.storage.MemoryStore()
+    z_out = zarr.open(store=store, mode="w", shape=(5, 1, 1, 2, 2), dtype=np.uint8, chunks=(5, 1, 1, 2, 2))
+    z_out[...] = 0
+
+    # forcibly emulate missing chunks attribute (rare, but we can simulate by wrapping)
+    class _Wrap:
+        def __init__(self, z):
+            self._z = z
+            self.shape = z.shape
+            self.dtype = z.dtype
+            self.nbytes = z.nbytes
+            self.chunks = None
+        def __getitem__(self, idx):
+            return self._z.__getitem__(idx)
+        def __setitem__(self, idx, val):
+            self._z.__setitem__(idx, val)
+
+    z_wrap = _Wrap(z_out)
+
+    _copy_into_zarr_with_padding(z_wrap, src, out_start=1, axis_idx=axis_idx,
+                                 target_nonmerge_shape=z_wrap.shape)
+
+    out = np.asarray(z_out)
+    assert np.all(out[1:4, ...] == 4)
+    assert np.all(out[0, ...] == 0)
+    assert np.all(out[4, ...] == 0)
+
+def test_copy_into_zarr_with_padding_write_exceeds_destination_axis_is_clipped_not_raised():
+    axis_idx = 0  # merge along T
+
+    src = np.ones((3, 1, 1, 2, 2), dtype=np.uint8) * 5
+    z_out = _make_zarr(shape=(4, 1, 1, 2, 2), dtype=np.uint8, chunks=(2, 1, 1, 2, 2), fill=0)
+
+    out_start = 2  # request would conceptually write T=2,3,4 but dst has only 0..3
+
+    # Current Zarr behavior: no exception, assignment is effectively clipped to valid region.
+    _copy_into_zarr_with_padding(z_out, src, out_start=out_start, axis_idx=axis_idx,
+                                 target_nonmerge_shape=z_out.shape)
+
+    out = np.asarray(z_out)
+
+    # Only T indices 2 and 3 can be written (2 slices).
+    assert np.all(out[2:4, :, :, :, :] == 5)
+
+    # Everything before the written region must remain zero.
+    assert np.all(out[0:2, :, :, :, :] == 0)
+
+def test_copy_into_zarr_with_padding_src_exceeds_target_nonmerge_axis_is_clipped_not_raised():
+    axis_idx = 0  # merge along T
+
+    src = np.ones((1, 1, 1, 2, 10), dtype=np.uint8) * 7  # X=10
+    z_out = _make_zarr(shape=(2, 1, 1, 2, 6), dtype=np.uint8, chunks=(2, 1, 1, 2, 3), fill=0)
+
+    # Current Zarr behavior: no exception, non-merge write is effectively clipped to dst's X extent.
+    _copy_into_zarr_with_padding(z_out, src, out_start=0, axis_idx=axis_idx,
+                                 target_nonmerge_shape=z_out.shape)
+
+    out = np.asarray(z_out)
+
+    # Valid intersection is X=0..5.
+    assert np.all(out[0, :, :, :, 0:6] == 7)
+
+    # There is no X beyond 6 in dst; the key property to test is that dst content is consistent:
+    # second T slice remains untouched (still zeros).
+    assert np.all(out[1, :, :, :, :] == 0)
+
 
 # %% TEST OME_METADATA_CHECKUP
 # test OME_metadata_checkup function with minimal metadata
@@ -70,7 +840,6 @@ def test_OME_metadata_checkup_does_not_modify_input():
 
     assert md_in == md_copy
     assert md_out is not md_in
-
 
 def test_OME_metadata_checkup_keeps_core_and_keep_keys_top_level_and_moves_extras():
     md_in = {
@@ -113,7 +882,6 @@ def test_OME_metadata_checkup_keeps_core_and_keep_keys_top_level_and_moves_extra
     assert md_out["Annotations"]["foo"] == "bar"
     assert md_out["Annotations"]["original_meta_source"] == "LSM"
 
-
 def test_OME_metadata_checkup_preserves_existing_annotations_and_sets_namespace():
     md_in = {
         "axes": "TZCYX",
@@ -128,7 +896,6 @@ def test_OME_metadata_checkup_preserves_existing_annotations_and_sets_namespace(
     assert md_out["Annotations"]["extra"] == 1
     assert "extra" not in md_out
 
-
 def test_OME_metadata_checkup_handles_non_dict_annotations_gracefully():
     md_in = {
         "axes": "TZCYX",
@@ -142,7 +909,6 @@ def test_OME_metadata_checkup_handles_non_dict_annotations_gracefully():
     assert md_out["Annotations"]["Namespace"] == "omio:metadata"
     assert md_out["Annotations"]["extra"] == 7
     assert "extra" not in md_out
-
 
 def test_OME_metadata_checkup_protects_existing_original_keys_in_annotations():
     md_in = {
@@ -164,7 +930,6 @@ def test_OME_metadata_checkup_protects_existing_original_keys_in_annotations():
     assert md_out["Annotations"]["other"] == "ok"
     assert "original_A" not in md_out
     assert "extra" not in md_out
-
 
 def test_OME_metadata_checkup_prints_skip_message_when_verbose(capsys):
     md_in = {
@@ -269,6 +1034,87 @@ def test_read_tif_samples_axis_is_folded_into_channel(tmp_path):
     assert image.shape[2] == 6          # C = 2*3
     assert image.shape[-2:] == (32, 32)
 
+def test_read_tif_rgb_no_metadata_shape_yxc_ok(tmp_path):
+    f = tmp_path / "rgb_plain.tif"
+    rgb = np.random.randint(0, 255, (12, 13, 3), dtype=np.uint8)
+
+    tifffile.imwrite(f, rgb, photometric="rgb")
+
+    image, md = read_tif(str(f), verbose=False)
+
+    assert md["axes"] == "TZCYX"
+    assert image.ndim == 5
+    assert image.shape[-2:] == (12, 13)
+    assert image.shape[2] == 3  # C
+
+def test_read_tif_rgb_no_metadata_unexpected_shape_raises(tmp_path):
+    f = tmp_path / "rgb_weird.tif"
+    rgb = np.random.randint(0, 255, (2, 12, 13, 3), dtype=np.uint8)
+
+    tifffile.imwrite(f, rgb, photometric="rgb")
+
+    with pytest.raises(ValueError, match="Encountered RGB TIFF with unexpected shape"):
+        read_tif(str(f), verbose=False)
+
+def test_read_tif_physically_unreasonable_sizes_are_clamped_to_one(tmp_path, monkeypatch):
+    f = tmp_path / "plain.tif"
+    tifffile.imwrite(f, np.zeros((5, 7), dtype=np.uint16))
+
+    def fake_parse_ome_metadata(_):
+        return {
+            "axes": "YX",
+            "PhysicalSizeX": -1.0,
+            "PhysicalSizeY": 0.0,
+            "PhysicalSizeZ": -5.0,
+            "unit": "micron",
+            "PhysicalSizeXUnit": "micron",
+            "PhysicalSizeYUnit": "micron",
+            "PhysicalSizeZUnit": "micron",
+        }
+
+    monkeypatch.setattr("omio.omio._parse_ome_metadata", fake_parse_ome_metadata)
+
+    class FakeTiffFile:
+        def __init__(self, real):
+            self._real = real
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc, tb):
+            self._real.close()
+        @property
+        def series(self): return self._real.series
+        @property
+        def pages(self): return self._real.pages
+        @property
+        def imagej_metadata(self): return self._real.imagej_metadata
+        @property
+        def ome_metadata(self): return "<OME/>"  # non None
+        @property
+        def lsm_metadata(self): return None
+        def asarray(self): return self._real.asarray()
+
+    real = tifffile.TiffFile(str(f))
+    monkeypatch.setattr("tifffile.TiffFile", lambda _: FakeTiffFile(real))
+
+    image, md = read_tif(str(f), verbose=False)
+
+    assert md["PhysicalSizeX"] == 1
+    assert md["PhysicalSizeY"] == 1
+    assert md["PhysicalSizeZ"] == 1
+
+def test_read_tif_zarr_disk_creates_cache_and_returns_zarr_array(tmp_path):
+    f = tmp_path / "plain.tif"
+    tifffile.imwrite(f, np.zeros((6, 8), dtype=np.uint16))
+
+    image, md = read_tif(str(f), zarr_store="disk", verbose=False)
+
+    assert isinstance(image, zarr.core.array.Array)
+    assert md["axes"] == "TZCYX"
+    cache = tmp_path / ".omio_cache"
+    assert cache.exists()
+    assert any(p.suffix == ".zarr" for p in cache.iterdir())
+
+
 # paginated TIFF tests:
 def test_read_tif_paginated_returns_lists_and_contains_expected_xy_shapes(tmp_path, capsys):
     f = tmp_path / "paginated.tif"
@@ -329,6 +1175,33 @@ def test_read_tif_paginated_returns_lists_and_contains_expected_xy_shapes(tmp_pa
     assert not isinstance(images, list)
     assert metadatas["axes"] == "TZCYX"
     assert images.shape[-2:] == (20, 20)
+
+def test_read_tif_forced_paginated_axis_p_splits_into_pages(tmp_path, monkeypatch):
+    f = tmp_path / "p_like.tif"
+
+    data = np.random.randint(0, 255, (4, 10, 11), dtype=np.uint8)
+    tifffile.imwrite(f, data, photometric="minisblack")
+
+    def fake_ensure_axes_in_metadata(md, tif):
+        md = dict(md)
+        md["axes"] = "PYX"
+        return md
+
+    monkeypatch.setattr("omio.omio._ensure_axes_in_metadata", fake_ensure_axes_in_metadata)
+
+    monkeypatch.setattr("omio.omio.OME_metadata_checkup", lambda md, verbose=False: md)
+    monkeypatch.setattr("omio.omio._batch_correct_for_OME_axes_order",
+                        lambda imgs, mds, memap_large_file, verbose=False: (imgs, mds))
+
+    images, metadatas = read_tif(str(f), verbose=False)
+
+    assert isinstance(images, list)
+    assert isinstance(metadatas, list)
+    assert len(images) == 4
+    assert len(metadatas) == 4
+    for im, md in zip(images, metadatas):
+        assert md["axes"] == "YX"
+        assert im.shape == (10, 11)
 
 # multi-series TIFF tests (Weg B: no warnings expected):
 def _get_multiseries_carrier(md: dict) -> dict:
@@ -1393,11 +2266,6 @@ def test_write_ometiff_images_metadatas_length_mismatch_raises(tmp_path):
         )
 
 # %% IMREAD
-
-""" 
-We do not test for all currently supported image file formats here, as 
-we have dedicated tests for each format-specific reader function above.
-"""
 
 def test_imread_single_tif_dispatches_to_tif_reader(tmp_path):
     # minimal tif without metadata
