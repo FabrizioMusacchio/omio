@@ -45,6 +45,8 @@ dev = [
     "pytest-cov"
 ]
 
+[tool.flit.module]
+name = "omio"
 
 [tool.pytest.ini_options]
 addopts = "--cov=omio --cov-branch --cov-report=term --cov-report=xml"
