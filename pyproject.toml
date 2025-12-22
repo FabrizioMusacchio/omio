@@ -5,7 +5,7 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "omio-microscopy"
-version = "0.1.1"
+version = "0.1.2"
 description = "OMIO: Open Microscopy Image I/O"
 authors = [{ name = "Fabrizio Musacchio"},
     { name = "Fabrizio Musacchio", email = "fabrizio.musacchio@posteo.de" }
