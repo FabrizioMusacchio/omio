@@ -104,7 +104,7 @@ mamba install -y ipython ipykernel numpy zarr numcodecs tqdm czifile tifffile na
 # %% IMPORTS
 import os, re
 
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import version, PackageNotFoundError, packages_distributions
 
 import glob
 from tabnanny import verbose
@@ -125,12 +125,26 @@ from tqdm import tqdm
 import dask.array as da
 import yaml
 # %% MODULE-SCOPE GLOBALS
-#_OMIO_VERSION = "0.0.1" # ALWAYS update this when releasing a new version!
-try:
-    _OMIO_VERSION = version("omio")
-except PackageNotFoundError:
-    # fallback for editable installs / direct execution
-    _OMIO_VERSION = "0.0.0+unknown"
+def _resolve_omio_version() -> str:
+    # primary: known PyPI distribution name
+    try:
+        return version("omio-microscopy")
+    except PackageNotFoundError:
+        pass
+
+    # fallback: map import package -> installed distribution(s)
+    try:
+        dist_names = packages_distributions().get("omio", [])
+        for dist in dist_names:
+            try:
+                return version(dist)
+            except PackageNotFoundError:
+                continue
+    except Exception:
+        pass
+
+    return "0.0.0+unknown"
+_OMIO_VERSION = _resolve_omio_version()
 
 _OME_AXES = "TZCYX" # this is the canonical OME axes order. DO NOT CHANGE!
 _AXIS_TO_INDEX = {"T": 0, "Z": 1, "C": 2, "Y": 3, "X": 4} # DO NOT CHANGE!
