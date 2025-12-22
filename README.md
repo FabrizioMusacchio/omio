@@ -7,9 +7,9 @@
 
 OMIO is designed as an infrastructure layer between heterogeneous microscopy file formats and downstream analysis or visualization workflows. It provides a unified I/O interface that enforces consistent axis ordering, metadata normalization, and memory-aware data handling across NumPy, Zarr, Dask, napari, and OME-TIFF.
 
-NOTE 1: OMIO is currently under active development. The API and feature set may change in future releases.
+**NOTE 1:** OMIO is **currently under active development**. The API and feature set may change in future releases.
 
-NOTE 2: A documentation website is being prepared and will be made available soon.
+**NOTE 2:** A **documentation website** is being prepared and will be made available soon.
 
 ## What is OMIO good for your microscopy data?
 Modern microscopy workflows face a recurring and largely unsolved problem: While image acquisition formats are diverse, downstream analysis and visualization pipelines implicitly assume consistent data semantics.
@@ -216,7 +216,7 @@ Its purpose is to provide a **reliable, explicit, and reproducible I/O layer** o
 
 
 ## License
-Will be provided soon.
+OMIO is released under the GNU General Public License v3.0 (GPLv3). Please refer to the [LICENSE](LICENSE) file for details.
 
 
 ## Citation
