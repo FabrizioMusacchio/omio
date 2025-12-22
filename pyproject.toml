@@ -1,0 +1,53 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+
+[project]
+name = "omio"
+version = "0.1.0"
+description = "OMIO: Open Microscopy Image I/O"
+authors = [{ name = "Fabrizio Musacchio"},
+    { name = "Fabrizio Musacchio", email = "fabrizio.musacchio@posteo.de" }
+]
+maintainers = [
+  { name = "Fabrizio Musacchio", email = "fabrizio.musacchio@posteo.de" }
+]
+license = "GPL-3.0-or-later"
+readme = "README.md"
+requires-python = ">=3.12"
+
+
+dependencies = [
+    "numpy",
+    "tifffile",
+    "czifile",
+    "zarr",
+    "dask[array]",
+    "numcodecs",
+    "tqdm",
+    "pyyaml",
+    "napari"
+]
+
+
+[project.urls]
+Homepage = "https://github.com/FabrizioMusacchio/omio"
+Documentation = "https://github.com/FabrizioMusacchio/omio#readme"
+Source = "https://github.com/FabrizioMusacchio/omio"
+Tracker = "https://github.com/FabrizioMusacchio/omio/issues"
+
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov"
+]
+
+
+[tool.pytest.ini_options]
+addopts = "--cov=omio --cov-report=xml"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore:Pickle, copy, and deepcopy support will be removed from itertools in Python 3.14\\.:DeprecationWarning",
+]
