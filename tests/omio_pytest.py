@@ -270,7 +270,7 @@ def test_read_tif_samples_axis_is_folded_into_channel(tmp_path):
     assert image.shape[-2:] == (32, 32)
 
 # paginated TIFF tests:
-def test_read_tif_paginated_returns_lists_and_contains_expected_xy_shapes(tmp_path):
+def test_read_tif_paginated_returns_lists_and_contains_expected_xy_shapes(tmp_path, capsys):
     f = tmp_path / "paginated.tif"
     data = np.random.randint(0, 255, (8, 2, 20, 20, 3), 'uint8')
     subresolutions = 2
@@ -322,8 +322,9 @@ def test_read_tif_paginated_returns_lists_and_contains_expected_xy_shapes(tmp_pa
 
     images, metadatas = read_tif(str(f), verbose=False)
 
-    # # for this test function, we clear the captured output:
-    # capsys.readouterr()
+    # for this test function, we clear the captured output; we do this
+    # to suppress an expected print warning:
+    capsys.readouterr()
 
     assert not isinstance(images, list)
     assert metadatas["axes"] == "TZCYX"
