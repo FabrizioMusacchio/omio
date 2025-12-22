@@ -297,7 +297,7 @@ def test_read_tif_paginated_returns_lists_and_contains_expected_xy_shapes(tmp_pa
         options = dict(
             photometric='rgb',
             tile=(16, 16),
-            compression='jpeg',
+            compression='zlib',
             resolutionunit='CENTIMETER',
             maxworkers=2)
         tif.write(
@@ -1741,7 +1741,7 @@ def _write_pyramid_ome_tif(path: Path, shape=(8, 2, 20, 20, 3), subresolutions=2
         options = dict(
             photometric="rgb",
             tile=(16, 16),
-            compression="jpeg",
+            compression="zlib",
             resolutionunit="CENTIMETER",
             maxworkers=2,
         )
