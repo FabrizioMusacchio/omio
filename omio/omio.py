@@ -3768,13 +3768,29 @@ def _check_fname_out(fname_out, overwrite):
     * The function assumes the ``.ome.tif`` extension is present and does not
     attempt to generalize to other extensions.
     """
-    fname_out_rev = fname_out
+    """ fname_out_rev = fname_out
     if os.path.exists(fname_out) and not overwrite:
         i = 0
         while os.path.exists(fname_out_rev):
             i += 1
             fname_out_rev = fname_out.replace(".ome.tif", f" {i}.ome.tif")
-    return fname_out_rev
+    return fname_out_rev """
+    if not fname_out.endswith(".ome.tif"):
+        raise ValueError(
+            "_check_fname_out: fname_out must end with '.ome.tif'. "
+            f"Got: {fname_out!r}"
+        )
+
+    if overwrite or not os.path.exists(fname_out):
+        return fname_out
+
+    base = fname_out[:-len(".ome.tif")]
+    i = 1
+    while True:
+        candidate = f"{base} {i}.ome.tif"
+        if not os.path.exists(candidate):
+            return candidate
+        i += 1
 # function to normalize axes and squeeze singleton S axis:
 def _normalize_axes_for_ometiff(image, axes):
     """
