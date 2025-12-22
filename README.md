@@ -11,6 +11,7 @@ OMIO is designed as an infrastructure layer between heterogeneous microscopy fil
 
 **NOTE 2:** A **documentation website** is being prepared and will be made available soon.
 
+
 ## What is OMIO good for your microscopy data?
 Modern microscopy workflows face a recurring and largely unsolved problem: While image acquisition formats are diverse, downstream analysis and visualization pipelines implicitly assume consistent data semantics.
 
