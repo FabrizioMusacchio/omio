@@ -16,7 +16,7 @@ a unified I/O interface that enforces consistent axis ordering, metadata
 normalization, and memory-aware data handling across NumPy, Zarr, Dask, 
 napari, and OME-TIFF.
 
-**NOTE 1:** OMIO is **currently under active development**. The API and 
+**NOTE:** OMIO is **currently under active development**. The API and 
 feature set may change in future releases.
 
 This documentation provides:

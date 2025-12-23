@@ -10,10 +10,32 @@ import os
 import sys
 from datetime import datetime
 sys.path.insert(0, os.path.abspath("../.."))
+from importlib.metadata import version as pkg_version, PackageNotFoundError, packages_distributions
+
+def _resolve_omio_version() -> str:
+    # primary: known PyPI distribution name
+    try:
+        return pkg_version("omio-microscopy")
+    except PackageNotFoundError:
+        pass
+
+    # fallback: map import package -> installed distribution(s)
+    try:
+        dist_names = packages_distributions().get("omio", [])
+        for dist in dist_names:
+            try:
+                return pkg_version(dist)
+            except PackageNotFoundError:
+                continue
+    except Exception:
+        pass
+
+    return "0.0.0+unknown"
+
 
 project = 'OMIO'
 author = 'Fabrizio Musacchio'
-release = 'v0.1.5'
+release = _resolve_omio_version()
 copyright = f"{datetime.now().year}, {author}"
 
 # -- General configuration ---------------------------------------------------
