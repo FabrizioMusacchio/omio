@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use OMIO in your research, please cite it as below."
+title: "OMIO: A Python library for unified I/O of multidimensional microscopy images"
+authors:
+  - family-names: Musacchio
+    given-names: Fabrizio
+    orcid: https://orcid.org/0000-0002-9043-3349
+repository-code: https://github.com/FabrizioMusacchio/omio
+doi: 10.5281/zenodo.18030883
+license: GPL-3.0-or-later
+keywords:
+  - microscopy
+  - bioimaging
+  - image I/O
+  - multidimensional imaging
+  - OME
+  - OME-TIFF
+  - metadata
+  - zarr
+  - tif
+  - czi
+  - lsm
+  - Python
+  - scientific software
