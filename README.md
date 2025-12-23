@@ -235,6 +235,17 @@ OMIO intentionally does **not**:
 
 Its purpose is to provide a **reliable, explicit, and reproducible I/O layer** on which such pipelines can be built.
 
+## Currently supported file formats and dependencies
+At the moment, OMIO supports reading the following microscopy file formats:
+
+* TIF, ImageJ TIFF, OME-TIFF (`*.tif`, `*.tiff`, `*.ome.tif`, `*.ome.tiff`)
+* Zeiss LSM (`*.lsm`)
+* Zeiss CZI (`*.czi`)
+* Thorlabs RAW binary files incl. Experiment.xml (`*.raw`)
+
+OMIO relies on the following third-party libraries for file format handling:
+* `tifffile`, `czifile`, `numpy`, `zarr`, `dask`, `napari`, `tqdm`, `pyyaml`, `imagecodecs`, `numcodecs`
+
 
 ## Requests for new file formats and reader extensions
 OMIO is designed to grow and evolve based on user needs and real-world microscopy data. By intention, we will add support for additional file formats or format variants over time, bases on user requests and contributions.
