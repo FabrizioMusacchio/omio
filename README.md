@@ -227,6 +227,13 @@ OMIO intentionally does **not**:
 Its purpose is to provide a **reliable, explicit, and reproducible I/O layer** on which such pipelines can be built.
 
 
+## Requests for new file formats and reader extensions
+OMIO is designed to grow and evolve based on user needs and real-world microscopy data. By intention, we will add support for additional file formats or format variants over time, bases on user requests and contributions.
+
+Requests for new readers or reader extensions are therefore **very welcome** and should be submitted via the GitHub issue tracker. To be actionable, such requests **must include access to a representative example file**, as OMIO intentionally avoids speculative or heuristic-based format inference.
+
+Detailed guidelines for requesting new format support, including what information to provide and how example files can be shared, are described in *[*CONTRIBUTING.md**](CONTRIBUTING.md).
+
 ## License
 OMIO is released under the GNU General Public License v3.0 (GPLv3). Please refer to the [LICENSE](LICENSE) file for details.
 
