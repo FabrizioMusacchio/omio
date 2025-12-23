@@ -1758,14 +1758,14 @@ def OME_metadata_checkup(metadata: dict,
     Notes
     -----
     * Core OME-like keys (for example physical sizes, time increment, and axis
-    declarations) remain at the top level.
+      declarations) remain at the top level.
     * Selected non-OME but operationally useful keys (such as ``Size*`` entries,
-    ``shape``, and ``Channel_Count``) are explicitly retained at the top level.
+      ``shape``, and ``Channel_Count``) are explicitly retained at the top level.
     * All remaining keys are transferred into ``Annotations``.
     * Existing annotations are preserved and extended. The namespace is always
-    set or overwritten with the provided value.
+      set or overwritten with the provided value.
     * Keys starting with ``"original_"`` in an existing ``Annotations`` block are
-    protected from being overwritten.
+      protected from being overwritten.
     """
 
     # define truly OME-like core keys that correspond to real OME attributes:
@@ -1863,7 +1863,7 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
         * None: load fully into RAM and return a NumPy array
         * "memory": return a Zarr array backed by an in-memory store
         * "disk": return a Zarr array stored in the cache folder
-        ``{parent}/.omio_cache/<basename>.zarr``
+          ``{parent}/.omio_cache/<basename>.zarr``
 
         Default is None.
     return_list : bool, optional
@@ -1889,19 +1889,19 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
     Notes
     -----
     * Metadata sources are merged in the order they are read. Missing essentials
-    are filled from the image shape and default values.
+      are filled from the image shape and default values.
     * Unit normalization updates unit fields only. Numerical unit conversion is not
-    performed except for specific paginated LSM cases where Zeiss voxel sizes are
-    converted from meters to micrometers.
+      performed except for specific paginated LSM cases where Zeiss voxel sizes are
+      converted from meters to micrometers.
     * If `zarr_store` is not None, tifffile's ``aszarr=True`` path is used and then
-    materialized into a concrete Zarr store to ensure predictable downstream
-    behavior. Data transfer uses slice-wise copying over the last two spatial
-    dimensions to limit peak memory use.
+      materialized into a concrete Zarr store to ensure predictable downstream
+      behavior. Data transfer uses slice-wise copying over the last two spatial
+      dimensions to limit peak memory use.
     * Axis normalization to TZCYX may insert singleton dimensions for missing OME
-    axes and may reorder existing axes. The updated axis string is stored in the
-    returned metadata.
+      axes and may reorder existing axes. The updated axis string is stored in the
+      returned metadata.
     * When `zarr_store="disk"`, the function may create and overwrite paths under
-    ``.omio_cache``.
+      ``.omio_cache``.
     
     OMIO restrictions for multi-series TIFF/LSM files
     -------------------------------------------------
@@ -1910,14 +1910,14 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
     policy to avoid ambiguous interpretations:
 
     * If a file contains exactly one series (`len(tif.series) == 1`), OMIO guarantees
-    correct reading and normalization to canonical OME axis order (TZCYX).
+      correct reading and normalization to canonical OME axis order (TZCYX).
     * If a file contains multiple series (`len(tif.series) > 1`), OMIO will process
-    **only the first series (series 0)** and ignore all others.
+      **only the first series (series 0)** and ignore all others.
     * A warning is emitted in this case, and the policy decision is recorded in the
-    returned metadata.
+      returned metadata.
     * OMIO does not attempt to infer relationships between multiple series, does not
-    concatenate them, and does not inspect their shapes, axes, or photometric
-    interpretation beyond series 0.
+      concatenate them, and does not inspect their shapes, axes, or photometric
+      interpretation beyond series 0.
 
     This policy is intentional and favors reproducibility and explicit behavior over
     heuristic reconstruction of complex TIFF layouts.
@@ -2500,7 +2500,7 @@ def read_czi(fname, physicalsize_xyz=None, pixelunit="micron", zarr_store=None,
         * None: return a NumPy array in RAM
         * "memory": return a Zarr array backed by an in-memory store
         * "disk": return a Zarr array stored in the cache folder
-        ``{parent}/.omio_cache/<basename>.zarr``
+          ``{parent}/.omio_cache/<basename>.zarr``
 
         Existing on-disk stores at that location are replaced. Default is None.
     return_list : bool, optional
@@ -2526,16 +2526,16 @@ def read_czi(fname, physicalsize_xyz=None, pixelunit="micron", zarr_store=None,
     Notes
     -----
     * Non-OME axes present in CZI files (for example B, V, or trailing singleton
-    axes) are collapsed by indexing at 0 so that only OME-relevant axes remain.
-    The resulting axis string is updated accordingly.
+      axes) are collapsed by indexing at 0 so that only OME-relevant axes remain.
+      The resulting axis string is updated accordingly.
     * Physical voxel sizes are extracted from the CZI scaling metadata and converted
-    to micrometer units using a fixed conversion factor. If values are missing or
-    non-positive, they fall back to 1.0.
+      to micrometer units using a fixed conversion factor. If values are missing or
+      non-positive, they fall back to 1.0.
     * Axis reordering to TZCYX may insert singleton dimensions for missing OME axes
-    and may permute existing axes. The updated axis declaration is stored in the
-    returned metadata.
+      and may permute existing axes. The updated axis declaration is stored in the
+      returned metadata.
     * When `zarr_store="disk"`, the function may create and overwrite paths under
-    ``.omio_cache``.
+      ``.omio_cache``.
     """
 
     # validate zarr_store parameter
@@ -2709,6 +2709,7 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
     
     An example YAML file might look like this:
     .. code-block:: yaml
+    
         T: 1
         Z: 10
         C: 3
@@ -2751,7 +2752,7 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
         * None: read and return a NumPy array in RAM
         * "memory": return a Zarr array backed by an in-memory store
         * "disk": return a Zarr array stored in the cache folder
-        ``{parent}/.omio_cache/<basename>.zarr``
+          ``{parent}/.omio_cache/<basename>.zarr``
 
         Existing on-disk stores at that location are replaced. Default is None.
     return_list : bool, optional
@@ -2783,18 +2784,18 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
     Notes
     -----
     * RAW reading requires the dimensions T, Z, C, Y, X and a bit depth to infer the
-    dtype and reshape the pixel stream. XML metadata is preferred. YAML is used
-    only if XML is absent.
+      dtype and reshape the pixel stream. XML metadata is preferred. YAML is used
+      only if XML is absent.
     * YAML fallback expects at minimum the keys ``T``, ``Z``, ``C``, ``Y``, ``X``,
-    and ``bits``. Additional keys such as ``pixelunit``, ``PhysicalSizeX/Y/Z``,
-    and ``TimeIncrement`` are optional.
+      and ``bits``. Additional keys such as ``pixelunit``, ``PhysicalSizeX/Y/Z``,
+      and ``TimeIncrement`` are optional.
     * For `zarr_store` not None, the function uses ``numpy.memmap`` and slice-wise
-    copying to avoid loading the full RAW into RAM before writing.
+      copying to avoid loading the full RAW into RAM before writing.
     * Axis normalization to TZCYX is applied at the end and may insert singleton
-    dimensions or reorder axes. The updated axis string and shape are stored in
-    the returned metadata.
+      dimensions or reorder axes. The updated axis string and shape are stored in
+      the returned metadata.
     * When `zarr_store="disk"`, the function may create and overwrite paths under
-    ``.omio_cache``.
+      ``.omio_cache``.
     """
 
     if zarr_store not in (None, "memory", "disk"):
@@ -3169,26 +3170,26 @@ def cleanup_omio_cache(fname, full_cleanup=False, verbose=True):
     Remove OMIO-generated on-disk cache data under the `.omio_cache` folder.
 
     This utility deletes Zarr stores created by OMIO when reading files with
-    `zarr_store="disk"`. The cache is expected to live in a hidden subfolder
-    `.omio_cache` within a dataset's parent directory.
+    ``zarr_store="disk"``. The cache is expected to live in a hidden subfolder
+    ``.omio_cache`` within a dataset's parent directory.
 
     Two modes are supported:
 
     * Targeted cleanup:
-    If `fname` is a file path and `full_cleanup` is False, only the corresponding
-    cache store ``.omio_cache/<basename>.zarr`` is removed.
+      If ``fname`` is a file path and ``full_cleanup`` is False, only the corresponding
+      cache store ``.omio_cache/<basename>.zarr`` is removed.
 
     * Full cleanup:
-    If `full_cleanup` is True, or if `fname` points to a directory, the entire
-    `.omio_cache` folder under that directory is removed.
-
+      If ``full_cleanup`` is True, or if ``fname`` points to a directory, the entire
+      ``.omio_cache`` folder under that directory is removed.
+    
     Parameters
     ----------
     fname : str
         Path to a file whose cache should be removed, or a directory containing an
-        `.omio_cache` folder to be cleaned.
+        ``.omio_cache`` folder to be cleaned.
     full_cleanup : bool, optional
-        If True, delete the entire `.omio_cache` folder. If False and `fname` is a
+        If True, delete the entire ``.omio_cache`` folder. If False and ``fname`` is a
         file, delete only the cache store corresponding to that file's basename.
         Default is False.
     verbose : bool, optional
@@ -3206,9 +3207,9 @@ def cleanup_omio_cache(fname, full_cleanup=False, verbose=True):
     Notes
     -----
     * Cache deletion is performed via recursive directory removal and is not
-    reversible.
-    * If no `.omio_cache` folder exists at the expected location, the function
-    returns without error.
+      reversible.
+    * If no ``.omio_cache`` folder exists at the expected location, the function
+      returns without error.
     """
     if os.path.isfile(fname):
         parent_folder = os.path.dirname(fname)
@@ -3262,9 +3263,9 @@ def create_empty_metadata(physicalsize_xyz: Union[tuple[float, float, float], No
 
     * canonical axis declaration under ``"axes"`` (typically TZCYX),
     * shape and per-axis size fields (``shape``, ``SizeT``, ``SizeZ``, ``SizeC``,
-    ``SizeY``, ``SizeX``),
+      ``SizeY``, ``SizeX``),
     * physical voxel sizes and time sampling (``PhysicalSize*``, ``TimeIncrement``,
-    ``TimeIncrementUnit``),
+      ``TimeIncrementUnit``),
     * a unit field (``unit``),
     * an ``Annotations`` mapping for auxiliary fields,
     * the current OMIO version identifier under ``_OMIO_VERSION``.
@@ -3311,12 +3312,12 @@ def create_empty_metadata(physicalsize_xyz: Union[tuple[float, float, float], No
     Notes
     -----
     * The function constructs a new dictionary and does not modify `input_metadata`
-    in place, but if `input_metadata["Annotations"]` is a dictionary it may be
-    reused and updated during merging.
+      in place, but if `input_metadata["Annotations"]` is a dictionary it may be
+      reused and updated during merging.
     * The default axis string is taken from the module-level constant ``_OME_AXES``,
-    and size indices are derived from ``_AXIS_TO_INDEX``.
+      and size indices are derived from ``_AXIS_TO_INDEX``.
     * Final normalization is performed by `OME_metadata_checkup`, which may move
-    non-core fields into ``Annotations`` and enforce an annotations namespace.
+      non-core fields into ``Annotations`` and enforce an annotations namespace.
     """
     md = {
         "axes": _OME_AXES,      # "TZCYX"
@@ -3462,11 +3463,11 @@ def create_empty_image(shape: tuple[int, int, int, int, int] = (1, 1, 1, 1, 1),
     Notes
     -----
     * The function assumes canonical OME axes TZCYX as defined by the module-level
-    constant ``_OME_AXES``.
+      constant ``_OME_AXES``.
     * For `zarr_store="disk"`, any existing store at the target location is removed
-    before creating a new one.
+      before creating a new one.
     * Chunking is delegated to `compute_default_chunks`. For very small arrays,
-    chunk sizes may match the full dimensions.
+      chunk sizes may match the full dimensions.
     """
     if shape is None or len(shape) != 5:
         warnings.warn("create_empty_image: shape must be a 5-tuple (T, Z, C, Y, X).\n"
@@ -3604,9 +3605,9 @@ def update_metadata_from_image(metadata: dict,
     Notes
     -----
     * The function enforces ``md["axes"] = _OME_AXES`` unconditionally. It does not
-    attempt to infer axes from the input metadata.
+      attempt to infer axes from the input metadata.
     * The input dictionary is copied; updates are applied to a new dictionary and
-    the original `metadata` is not modified in place.
+      the original `metadata` is not modified in place.
     """
     if metadata is None:
         metadata = {}
@@ -3934,13 +3935,13 @@ def write_ometiff(fname: str,
     Output naming follows a provenance-first policy:
 
     * If the metadata contain an original filename inside ``Annotations``, that
-    basename is used as the output basename.
+      basename is used as the output basename.
     * Otherwise, the basename is derived from `fname` (file stem) or from the
-    directory name if `fname` is a directory.
+      directory name if `fname` is a directory.
     * Filename collisions are resolved by `_check_fname_out` unless `overwrite` is
-    True.
+      True.
     * If multiple stacks are written and no per-stack provenance name is available,
-    a numeric suffix ``_NNN`` is appended to keep outputs distinct.
+      a numeric suffix ``_NNN`` is appended to keep outputs distinct.
 
     If `relative_path` is provided, outputs are written into a subfolder relative to
     the chosen output parent directory.
@@ -3994,19 +3995,20 @@ def write_ometiff(fname: str,
     Notes
     -----
     * BigTIFF selection is determined by `_check_bigtiff`, using the uncompressed
-    array size and, if needed, an estimated compressed size.
+      array size and, if needed, an estimated compressed size.
     * Axes are normalized by `_normalize_axes_for_ometiff` (currently removing a
-    singleton ``"S"`` axis) and then permuted into the writer's target axis order
-    before writing.
+      singleton ``"S"`` axis) and then permuted into the writer's target axis order
+      before writing.
     * Physical pixel sizes are written both as OME physical size fields and as TIFF
-    resolution tags using ``resolution=(1/PhysicalSizeY, 1/PhysicalSizeX)``.
+      resolution tags using ``resolution=(1/PhysicalSizeY, 1/PhysicalSizeX)``.
     * Map annotations are written from ``metadata["Annotations"]``. If annotations
-    are a dictionary, a single MapAnnotation is written. If annotations are a
-    list of dictionaries, multiple MapAnnotations are written. A namespace entry
-    is ensured if missing.
+      are a dictionary, a single MapAnnotation is written. If annotations are a
+      list of dictionaries, multiple MapAnnotations are written. A namespace entry
+      is ensured if missing.
     * The function writes with ``photometric="minisblack"`` and disables ImageJ
-    metadata blocks (``imagej=False``), relying on OME metadata for
-    interoperability.
+      metadata blocks (``imagej=False``), relying on OME metadata for
+      interoperability.
+    
     """
     
     
@@ -4761,12 +4763,12 @@ def open_in_napari(images: Union[np.ndarray, "zarr.core.array.Array", list[Union
     Notes
     -----
     * This function does not perform axis normalization itself. It assumes that
-    inputs already follow OMIO’s canonical axis convention as declared by
-    `axes_full`, and delegates squeezing, channel-axis inference, and scaling to
-    ``_single_image_open_in_napari``.
-    * When multiple images are opened, the layer name is derived from `fname` with a
-    simple index suffix; if more informative naming is desired, pass a distinct
-    `fname` per call or use the `viewer_name` mechanism in the single-image helper.
+      inputs already follow OMIO’s canonical axis convention as declared by
+      ``axes_full``, and delegates squeezing, channel-axis inference, and scaling to
+      ``_single_image_open_in_napari``.
+    * When multiple images are opened, the layer name is derived from ``fname`` with a
+      simple index suffix; if more informative naming is desired, pass a distinct
+      ``fname`` per call or use the ``viewer_name`` mechanism in the single-image helper.
     """
     # check, whether images and metadatas are lists:
     if not isinstance(images, (list, tuple)):
@@ -6114,10 +6116,10 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     Two merge modes are supported.
 
     * `merge_multiple_files_in_folder=True` merges all images found in a folder by
-    concatenating along `merge_along_axis`. This is applied after reading all files from
-    that folder.
+      concatenating along `merge_along_axis`. This is applied after reading all files from
+      that folder.
     * `merge_folder_stacks=True` merges the tagged co folder stacks by concatenating along
-    `merge_along_axis`.
+      `merge_along_axis`.
 
     `merge_along_axis` must be one of {"T", "Z", "C"}. In merge modes, OMIO expects that all
     inputs are already in OME order and have 5 dimensions (TZCYX). If `zeropadding=False`,
@@ -6391,47 +6393,53 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     
     The behavior depends on the type and structure of `fname`:
 
-    * Single file path:
-        The file is read according to its extension (TIFF/OME TIFF/LSM, CZI, or RAW),
+    Single file path
+        The file is read according to its extension (TIFF, OME TIFF, LSM, CZI, or RAW),
         converted to OMIO's internal representation, and written as a single OME TIFF.
-    * List of file paths:
+
+    List of file paths
         Each file is read independently. By default, one OME TIFF per input file is
         written. If merge options are enabled (for example
-        `merge_multiple_files_in_folder`), files may be concatenated before writing.
-    * Folder path:
-        By default, all supported image files in the folder are read (optionally
-        recursively if `recursive=True`) and written as individual OME TIFF files.
+        ``merge_multiple_files_in_folder``), files may be concatenated before writing.
+
+    Folder path
+        By default, all supported image files in the folder are read, optionally
+        recursively if ``recursive=True``, and written as individual OME TIFF files.
+
         Additional folder specific modes are available:
-        - `folder_stacks=True`:
-            The folder is interpreted as one element of a tagged folder stack
-            (for example TAG_000, TAG_001, …). The first valid image file from each
-            tagged co folder is read and written as a separate OME TIFF.
-        - `merge_folder_stacks=True`:
-            Tagged folder stacks are read as above, but the resulting stacks are
-            concatenated along `merge_along_axis` and written as a single merged
-            OME TIFF.
-        - `merge_multiple_files_in_folder=True`:
-            All image files found in the folder are concatenated along
-            `merge_along_axis` and written as a single merged OME TIFF.
+
+        * ``folder_stacks=True``:
+          The folder is interpreted as one element of a tagged folder stack
+          (for example ``TAG_000``, ``TAG_001``). The first valid image file from each
+          tagged folder is read and written as a separate OME TIFF.
+        * ``merge_folder_stacks=True``:
+          Tagged folder stacks are read as above, but the resulting stacks are
+          concatenated along ``merge_along_axis`` and written as a single merged
+          OME TIFF.
+        * ``merge_multiple_files_in_folder=True``:
+          All image files found in the folder are concatenated along
+          ``merge_along_axis`` and written as a single merged OME TIFF.
 
     Merge behavior
     --------------
     Merge operations follow the same validation and padding rules as in `imread(...)`:
+    
     * Allowed merge axes are "T", "Z", and "C".
     * If `zeropadding=False`, all non merge axes must match exactly.
     * If `zeropadding=True`, non merge axes are padded with zeros to the maximum size
-    across inputs before concatenation.
+      across inputs before concatenation.
 
     Output behavior
     ---------------
     The output location and naming follow `write_ometiff(...)`:
+    
     * OME TIFFs are written next to the input file or inside the input folder.
     * If `relative_path` is provided, a subfolder is created under the chosen output
-    parent directory.
+      parent directory.
     * When merge modes are used, output filenames may include an indicator suffix to
-    reflect merged content.
+      reflect merged content.
     * If `overwrite=False`, existing files are not replaced and collision safe names
-    are generated.
+      are generated.
 
     Zarr handling and cache cleanup
     -------------------------------
@@ -6642,7 +6650,7 @@ def bids_batch_convert(
     experiment folder either contains image files directly, or contains multiple
     tagfolders which contain the image files.
 
-    The schematic below uses <...> as placeholders for your chosen naming policy.
+    The schematic below uses ``<...>`` as placeholders for your chosen naming policy::
 
         project_root (= fname)
         ├─ <sub*>
@@ -6665,92 +6673,100 @@ def bids_batch_convert(
         └─ ...
 
     Where:
-    * <sub*> are subject folders detected by prefix matching with `sub`.
-    For example, if `sub="sub"`, then "sub-01", "sub01", "sub_01", "sub-A" all match,
-    because this function uses `startswith(sub)` only.
-    * <exp*> are experiment folders detected within each subject folder via `exp` and
-    `exp_match_mode` ("startswith", "exact", or "regex").
-    * <tagfolder*> are optional tagfolders detected within an experiment folder via
-    prefix matching with `tagfolder` (for example "TAG_").
-    If `tagfolder` is set, direct image files in <exp*> are ignored and only
-    tagfolders are processed.
+    
+    * ``<sub*>`` are subject folders detected by prefix matching with ``sub``.
+      For example, if ``sub="sub"``, then ``"sub-01"``, ``"sub01"``, ``"sub_01"``, and
+      ``"sub-A"`` all match, because this function uses ``startswith(sub)`` only.
+    * ``<exp*>`` are experiment folders detected within each subject folder via ``exp`` and
+      ``exp_match_mode`` (``"startswith"``, ``"exact"``, or ``"regex"``).
+    * ``<tagfolder*>`` are optional tagfolders detected within an experiment folder via
+      prefix matching with ``tagfolder`` (for example ``"TAG_"``).
+      If ``tagfolder`` is set, direct image files in ``<exp*>`` are ignored and only
+      tagfolders are processed.
     
 
     Folder discovery and selection
     ------------------------------
-    The input `fname` must be a directory and is treated as the project root.
+    The input ``fname`` must be a directory and is treated as the project root.
 
     Subject detection:
-    * Every immediate subdirectory of `fname` whose name starts with `sub` is treated
-    as a subject folder. No additional validation is performed.
+    
+    * Every immediate subdirectory of ``fname`` whose name starts with ``sub`` is treated
+      as a subject folder. No additional validation is performed.
 
     Experiment detection:
-    * Within each subject folder, every immediate subdirectory whose name matches `exp`
-    under `exp_match_mode` is treated as an experiment folder.
-    Matching modes are:
-    - "startswith": folder name starts with `exp`
-    - "exact": folder name equals `exp`
-    - "regex": `re.match(exp, foldername)` succeeds
+    
+    * Within each subject folder, every immediate subdirectory whose name matches ``exp``
+      under ``exp_match_mode`` is treated as an experiment folder.
+      Matching modes are:
+      
+      * ``"startswith"``: folder name starts with ``exp``
+      * ``"exact"``: folder name equals ``exp``
+      * ``"regex"``: ``re.match(exp, foldername)`` succeeds
 
     Conversion behavior inside each experiment folder
     -------------------------------------------------
     Two mutually exclusive modes exist depending on `tagfolder`.
 
     Mode A: tagfolder is None (direct file conversion):
+    
     * The converter processes image files located directly in the experiment folder.
-    * If `merge_multiple_files_in_folder=False`, every supported image file is
-    converted to its own OME-TIFF output.
-    * If `merge_multiple_files_in_folder=True`, all supported image files in the
-    experiment folder are read and concatenated along `merge_along_axis` (with
-    optional `zeropadding` on non-merge axes) into one merged output.
-
+    * If ``merge_multiple_files_in_folder=False``, every supported image file is
+      converted to its own OME-TIFF output.
+    * If ``merge_multiple_files_in_folder=True``, all supported image files in the
+      experiment folder are read and concatenated along ``merge_along_axis`` (with
+      optional ``zeropadding`` on non-merge axes) into one merged output.
+    
     Mode B: tagfolder is not None (tagged folder stacks):
+    
     * Direct image files in the experiment folder are ignored.
     * The converter searches for tagfolders inside the experiment folder whose name
-    starts with `tagfolder` (for example "TAG_").
-    * If `merge_tagfolders=False` (default), each tagfolder is converted separately
-    and produces its own OME-TIFF output.
-    * If `merge_tagfolders=True`, all tagfolders are read and merged into a single
-    output by reusing OMIO’s folder-stack logic. To keep output naming stable and
-    collision-free when provenance-driven naming is used, a synthetic provenance
-    name is injected into `metadata["Annotations"]["original_filename"]`.
+      starts with ``tagfolder`` (for example ``"TAG_"``).
+    * If ``merge_tagfolders=False`` (default), each tagfolder is converted separately
+      and produces its own OME-TIFF output.
+    * If ``merge_tagfolders=True``, all tagfolders are read and merged into a single
+      output by reusing OMIO’s folder-stack logic. To keep output naming stable and
+      collision-free when provenance-driven naming is used, a synthetic provenance
+      name is injected into ``metadata["Annotations"]["original_filename"]``.
 
     Input path semantics
     --------------------
     Only directory input is accepted:
-    * `fname` must be an existing directory and is treated as the project root.
+    
+    * ``fname`` must be an existing directory and is treated as the project root.
     * All outputs are written within the experiment scope determined by traversal.
 
     Output placement and naming
     ---------------------------
-    Output placement follows OMIO’s writer conventions via `imconvert()` and
-    `write_ometiff()`:
+    Output placement follows OMIO’s writer conventions via ``imconvert()`` and
+    ``write_ometiff()``:
 
-    * If `relative_path` is not None, outputs are written into a subfolder named
-    `relative_path` under the relevant experiment folder (or under the experiment
-    folder when writing a merged tagfolder product).
-    * If `relative_path` is None, outputs are written directly into the experiment
-    folder.
+    * If ``relative_path`` is not None, outputs are written into a subfolder named
+      ``relative_path`` under the relevant experiment folder (or under the experiment
+      folder when writing a merged tagfolder product).
+    * If ``relative_path`` is None, outputs are written directly into the experiment
+      folder.
     * Per-stack output basenames are preferably derived from metadata provenance via
-    `Annotations["original_filename"]` when present. Otherwise, a fallback basename
-    is derived from the corresponding folder name.
-    * If `overwrite=False`, name collisions are resolved by appending an incrementing
-    suffix to the output filename.
+      ``Annotations["original_filename"]`` when present. Otherwise, a fallback basename
+      is derived from the corresponding folder name.
+    * If ``overwrite=False``, name collisions are resolved by appending an incrementing
+      suffix to the output filename.
 
     Merging semantics
     -----------------
-    * `merge_along_axis` must be one of {"T","Z","C"}.
+    * ``merge_along_axis`` must be one of {"T","Z","C"}.
     * In merge operations, the merge axis segments are concatenated in discovery order.
-    * If `zeropadding=True`, non-merge axes may differ between inputs and will be
-    padded with zeros to the maximum size across inputs before concatenation.
-    If `zeropadding=False`, non-merge axes must match exactly or the merge is aborted.
+    * If ``zeropadding=True``, non-merge axes may differ between inputs and will be
+      padded with zeros to the maximum size across inputs before concatenation.
+      
+      If ``zeropadding=False``, non-merge axes must match exactly or the merge is aborted.
 
     Zarr and cache handling
     -----------------------
-    * `zarr_store` controls whether intermediate data are represented as NumPy in RAM
-    or as Zarr arrays ("memory" or "disk") during reading and merging.
-    * If `cleanup_cache=True` and `zarr_store` is not None, the function removes the
-    per-input `.omio_cache` artifacts created during conversion once outputs are written.
+    * ``zarr_store`` controls whether intermediate data are represented as NumPy in RAM
+      or as Zarr arrays ("memory" or "disk") during reading and merging.
+    * If ``cleanup_cache=True`` and ``zarr_store`` is not None, the function removes the
+      per-input `.omio_cache` artifacts created during conversion once outputs are written.
 
     Parameters
     ----------
