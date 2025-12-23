@@ -177,6 +177,15 @@ OMIO detects subjects, experiments, and optional tag folders via user-defined ma
 
 
 ## Typical usage patterns
+OMIO's core functions are:
+
+* `imread()`: read images from files or folders,
+* `imconvert()`: convert images to OME-TIFF,
+* `bids_batch_convert()`: batch-convert BIDS-like projects,
+* `open_in_napari()`: visualize images in napari,
+* `create_empty_metadata()`: create empty metadata templates,
+* `create_empty_image()`: create empty image arrays, and
+* `update_metadata_from_image()`: update metadata based on image properties.
 
 ### Read a single file
 
@@ -202,13 +211,13 @@ merged_img, merged_md = omio.imread(
 ### Convert to OME-TIFF
 
 ```python
-omio.convert_to_ometiff("experiment_folder")
+omio.imconvert("experiment_folder")
 ```
 
 ### Batch conversion over a BIDS-like project
 
 ```python
-omio.convert_bids_batch_to_ometiff(
+omio.bids_batch_convert(
     fname="project_root",
     sub="sub-",
     exp="TP",
@@ -232,7 +241,7 @@ OMIO is designed to grow and evolve based on user needs and real-world microscop
 
 Requests for new readers or reader extensions are therefore **very welcome** and should be submitted via the GitHub issue tracker. To be actionable, such requests **must include access to a representative example file**, as OMIO intentionally avoids speculative or heuristic-based format inference.
 
-Detailed guidelines for requesting new format support, including what information to provide and how example files can be shared, are described in *[*CONTRIBUTING.md**](CONTRIBUTING.md).
+Detailed guidelines for requesting new format support, including what information to provide and how example files can be shared, are described in *[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 OMIO is released under the GNU General Public License v3.0 (GPLv3). Please refer to the [LICENSE](LICENSE) file for details.
