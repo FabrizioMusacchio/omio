@@ -241,7 +241,7 @@ At the moment, OMIO supports reading the following microscopy file formats:
 * TIF, ImageJ TIFF, OME-TIFF (`*.tif`, `*.tiff`, `*.ome.tif`, `*.ome.tiff`)
 * Zeiss LSM (`*.lsm`)
 * Zeiss CZI (`*.czi`)
-* Thorlabs RAW binary files incl. Experiment.xml (`*.raw`)
+* Thorlabs RAW binary files incl. Experiment.xml (`*.raw` + `*.xml`)
 
 OMIO relies on the following third-party libraries for file format handling:
 * `tifffile`, `czifile`, `numpy`, `zarr`, `dask`, `napari`, `tqdm`, `pyyaml`, `imagecodecs`, `numcodecs`
