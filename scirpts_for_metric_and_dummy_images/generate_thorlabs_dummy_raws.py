@@ -1,5 +1,9 @@
 """ 
-This script generates dummy Thorlabs RAW files along with matching XML metadata files.
+This script generates dummy Thorlabs RAW files along with matching XML metadata 
+files for testing OMIO.
+
+author: Fabrizio Musacchio
+date: December 2025
 """
 # %% IMPORTS
 import os

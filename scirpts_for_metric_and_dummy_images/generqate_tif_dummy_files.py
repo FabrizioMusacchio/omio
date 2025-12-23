@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-Generate small dummy TIFF test files for OMIO.
+This script generates small dummy TIFF files for testing OMIO.
 
 Creates:
 * plain TIFFs with explicit axes metadata (tifffile metadata['axes'])
 * one OME-TIFF (C=2, Z=10, T=5, Y=20, X=20) with physical sizes and time increment
 * two paginated multi-series TIFF examples (minisblack and rgb)
+* and more
 
 All numeric stacks are uint16. Spatial calibration:
 * PhysicalSizeX = PhysicalSizeY = 0.19 µm
@@ -15,6 +16,9 @@ All numeric stacks are uint16. Spatial calibration:
 * TIFF resolution is set as (1/PhysicalSizeY, 1/PhysicalSizeX)
 
 Adjust `OUT_DIR` as needed.
+
+author: Fabrizio Musacchio
+date: December 2025
 """
 # %% IMPORTS
 import os
