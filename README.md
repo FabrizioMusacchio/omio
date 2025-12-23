@@ -147,6 +147,10 @@ OMIO provides direct integration with napari, supporting:
 
 Axis squeezing and cache generation are performed explicitly and transparently.
 
+
+### Creating metadata and image templates
+OMIO provides utility functions to create empty metadata and image templates that can be populated programmatically or used as blueprints for new datasets.
+
 ## Expected project structure (BIDS-like)
 OMIO supports batch processing of projects organized in a BIDS-like manner.  
 An abstract example is shown below:
