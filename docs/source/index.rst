@@ -6,7 +6,7 @@
 OMIO Documentation
 ==================
 
-**OMIO** (Open Microscopy Image I/O) is a policy-driven Python library 
+`**OMIO** <https://github.com/FabrizioMusacchio/omio>`_ (Open Microscopy Image I/O) is a policy-driven Python library 
 for reading, organizing, merging, visualizing, and exporting multidimensional 
 microscopy image data under explicit OME-compliant axis and metadata semantics.
 
