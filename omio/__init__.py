@@ -15,6 +15,7 @@ from .omio import (
     open_in_napari,
     hello_world,
     OME_metadata_checkup,
+    create_thorlabs_raw_yaml,
 )
 
 __all__ = [
@@ -32,4 +33,5 @@ __all__ = [
     "open_in_napari",
     "hello_world",
     "OME_metadata_checkup",
+    "create_thorlabs_raw_yaml"
 ]
