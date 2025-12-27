@@ -815,7 +815,90 @@ def _parse_ome_metadata(ome_xml):
 
 
 # function to standardize read imagej_metadata:
-def _standardize_imagej_metadata(imagej_metadata):
+def _rational_to_float(r):
+    """ 
+    Convert a TIFF rational value to a float.
+    Parameters
+    ----------
+    r : tuple, list, or float
+        The rational value, typically as (numerator, denominator) or a float.
+    Returns
+    -------
+    float or None
+        The converted float value, or None if conversion fails.
+    Notes
+    -----
+    * TIFF rationals are often stored as (num, den) tuples. If the denominator is zero,
+      None is returned to avoid division errors.
+    * If `r` is already a float or can be directly converted, that value is returned.
+    * If `r` is None or cannot be converted, the function returns None.
+    """
+    # TIFF rationals often come as (num, den):
+    if r is None:
+        return None
+    if isinstance(r, (tuple, list)) and len(r) == 2:
+        num, den = r
+        num = float(num)
+        den = float(den)
+        if den == 0:
+            return None
+        return num / den
+    try:
+        return float(r)
+    except Exception:
+        return None
+def _unit_to_um_factor_from_resolutionunit(v):
+    """ 
+    Convert a TIFF ResolutionUnit value to a micron scaling factor.
+    
+    Parameters
+    ----------
+    v : int or str
+        The TIFF ResolutionUnit value, either as an integer code or a descriptive string.   
+    Returns
+    -------
+    float or None
+        The scaling factor to convert from the specified unit to microns, or None if
+        the unit is unrecognized.
+    Notes
+    -----
+    * Standard TIFF ResolutionUnit codes are:
+        - 1: None (interpreted here as microns)
+        - 2: Inches (1 inch = 25400 microns)
+        - 3: Centimeter (1 cm = 10000 microns)
+    * Descriptive strings such as "inch", "centimeter", "millimeter", "micron", and "meter"
+      are also recognized in a case-insensitive manner.
+    * If `v` is None or does not match any known unit, the function returns None.
+    """
+    # TIFF ResolutionUnit: usually int codes or strings.
+    # Standard: 2=inches, 3=centimeter.
+    # Set by default in OMIO: 1=None (actually; in OMIO, we interprete this as microns)
+    if v is None:
+        return None
+    if isinstance(v, int):
+        if v == 2:
+            return 25400.0
+        if v == 3:
+            return 10000.0
+        if v == 1:
+            return 1.0
+        return None
+    s = str(v).strip().lower()
+    if "inch" in s:
+        return 25400.0
+    if "centimeter" in s or s == "cm":
+        return 10000.0
+    if "millimeter" in s or s == "mm":
+        return 1000.0
+    if "micron" in s or s == "µm" or s == "um":
+        return 1.0
+    if "meter" in s or s == "m":
+        return 1e6
+    return None
+def _standardize_imagej_metadata(imagej_metadata: Dict[str, Any],
+                                 tags: Union[list, None] = None,
+                                 verbose: bool = False
+                                 ) -> Dict[str, Any]:
     """
     Standardize ImageJ metadata keys and recover physical pixel sizes when possible.
 
@@ -906,7 +989,12 @@ def _standardize_imagej_metadata(imagej_metadata):
     ... 
     """
 
-    if "PhysicalSizeX" not in standardized_metadata:
+    unit_map_info = {'µm': 1e6, 'nm': 1e4, 'mm': 1e3, 'cm': 1e-3, 'm': 1.0}
+    #unit_map_info = {'µm': 1.0,'um': 1.0,'nm': 1e-3,'mm': 1e3,'cm': 1e4,'m':  1e6,}
+    unit_map_tags = {'inch': 25400.0, 'centimeter': 10000.0, 'millimeter': 1000.0, 'micron': 1.0, 'meter': 1e6}
+
+    if "PhysicalSizeX" not in standardized_metadata or "PhysicalSizeY" not in standardized_metadata:
+        # we do not also check for PhysicalSizeY/Z here, since they often come/miss together.
         # check whether standardized_metadata contains 'Info' key:
         if "Info" in standardized_metadata:
             info_str = standardized_metadata["Info"]
@@ -924,7 +1012,6 @@ def _standardize_imagej_metadata(imagej_metadata):
                         scaling_distance[key_part] = value_part
             # now extract PhysicalSizeX, PhysicalSizeY, PhysicalSizeZ:
             try:
-                unit_map = {'µm': 1e6, 'nm': 1e4, 'mm': 1e3, 'cm': 1e-3, 'm': 1.0}
                 for i in range(1, 4):
                     id_key = f"Id #{i}"
                     value_key = f"Value #{i}"
@@ -933,8 +1020,8 @@ def _standardize_imagej_metadata(imagej_metadata):
                         axis_id = scaling_distance[id_key]
                         axis_value = float(scaling_distance[value_key])
                         axis_unit = scaling_distance[unit_key]
-                        if axis_unit in unit_map:
-                            physical_size = axis_value * unit_map[axis_unit]
+                        if axis_unit in unit_map_info:
+                            physical_size = axis_value * unit_map_info[axis_unit]
                             if axis_id == 'X':
                                 standardized_metadata["PhysicalSizeX"] = physical_size
                             elif axis_id == 'Y':
@@ -944,11 +1031,78 @@ def _standardize_imagej_metadata(imagej_metadata):
             except Exception as e:
                 print(f"  Error while extracting PhysicalSize from Info: {e}")
                 print(f"  Leaving PhysicalSize entries empty.")
+        
+        # PhysicalSizeX/Y could now still be missing; try to extract from tags:
+        if "PhysicalSizeX" not in standardized_metadata or "PhysicalSizeY" not in standardized_metadata:
+            if tags is not None:
+                # sometimes, the tags list contains 'XResolution' and 'YResolution' entries:
+                try:
+                    # at the moment, we only consider tags[0], but there could be multiple tags
+                    # (otherwise run the following loop additionally for all tags in tags, for tag in tags:):
+                    tag0 = tags[0] if isinstance(tags, list) and len(tags) > 0 else tags
+
+                    XRes = None
+                    YRes = None
+                    ResUnit = None
+
+                    for _, t in tag0.items():
+                        name = getattr(t, "name", None)
+                        if name == "XResolution":
+                            XRes = getattr(t, "value", None)
+                            if verbose:
+                                print(f"    Found XResolution tag with value: {XRes}")
+                        elif name == "YResolution":
+                            YRes = getattr(t, "value", None)
+                            if verbose:
+                                print(f"    Found YResolution tag with value: {YRes}")
+                        elif name == "ResolutionUnit":
+                            ResUnit = getattr(t, "value", None)
+                            if verbose:
+                                print(f"    Found ResolutionUnit tag with value: {ResUnit}")
+                    x_pixels_per_unit = _rational_to_float(XRes)
+                    y_pixels_per_unit = _rational_to_float(YRes)
+                    factor_um = _unit_to_um_factor_from_resolutionunit(ResUnit)
+
+                    # pixels_per_unit must be > 0 to avoid division by zero:
+                    if (x_pixels_per_unit is not None and x_pixels_per_unit > 0 and
+                        y_pixels_per_unit is not None and y_pixels_per_unit > 0 and
+                        factor_um is not None):
+
+                        standardized_metadata["PhysicalSizeX"] = factor_um / x_pixels_per_unit
+                        standardized_metadata["PhysicalSizeY"] = factor_um / y_pixels_per_unit
+                        standardized_metadata.setdefault("PhysicalSizeXUnit", "micron")
+                        standardized_metadata.setdefault("PhysicalSizeYUnit", "micron")
+                        
+                        if verbose:
+                            print(f"      Calculated PhysicalSizeX = {standardized_metadata['PhysicalSizeX']} micron")
+                            print(f"      Calculated PhysicalSizeY = {standardized_metadata['PhysicalSizeY']} micron")
+                    else:
+                        if verbose:
+                            print("    Could not extract PhysicalSizeX/Y from tags due to missing or invalid values.")
+                    
+
+                except Exception as e:
+                    print(f"  Error while extracting PhysicalSize from tags: {e}")
+                    print(f"  Leaving PhysicalSizeX/Y entries empty.")
+            
 
     # handle missing PhysicalSizeZ by checking 'spacing' key:
     if "PhysicalSizeZ" not in standardized_metadata:
         if "spacing" in imagej_metadata:
             standardized_metadata["PhysicalSizeZ"] = imagej_metadata["spacing"]
+            if verbose:
+                print(f"    Extracted PhysicalSizeZ from 'spacing': {standardized_metadata['PhysicalSizeZ']}")
+            
+            if 'unit' in standardized_metadata:
+                standardized_metadata["PhysicalSizeZUnit"] = standardized_metadata['unit']
+                # convert to PhysicalSizeZ in micron:
+                unit = standardized_metadata['unit'].lower()
+                if unit in unit_map_tags:
+                    factor = unit_map_tags[unit]
+                    standardized_metadata["PhysicalSizeZ"] = standardized_metadata["PhysicalSizeZ"] * factor
+                    standardized_metadata["PhysicalSizeZUnit"] = "micron"
+                    if verbose:
+                        print(f"      Converted PhysicalSizeZ to micron: {standardized_metadata['PhysicalSizeZ']} micron")
 
     return standardized_metadata
 
@@ -1124,6 +1278,8 @@ def _metadata_units_check(metadata, pixelunit="micron"):
         # convert 'µm' to 'micron' if present:
         elif metadata[key] == 'µm':
             metadata[key] = 'micron'
+
+    # "unit" 
 
     return metadata
 
@@ -1661,7 +1817,7 @@ def _require_int(d, key):
     return int(d[key])
 
 # function to check for not yet covered metadata in tifffile:
-def _check_for_not_covered_metadata(tif, yet_covered_metadata):
+def _check_for_not_covered_metadata(tif, yet_covered_metadata, ignore_metadata=None):
     """
     Report metadata entries provided by tifffile that are not yet handled.
 
@@ -1682,6 +1838,8 @@ def _check_for_not_covered_metadata(tif, yet_covered_metadata):
     yet_covered_metadata : iterable of str
         Collection of metadata attribute names that are already handled and should
         be ignored during inspection.
+    ignore_metadata : iterable of str or None, optional
+        Additional metadata attribute names to be ignored during inspection.
 
     Returns
     -------
@@ -1712,10 +1870,9 @@ def _check_for_not_covered_metadata(tif, yet_covered_metadata):
     # loop through available_metadata and check, which tif.available_metadata[i] is not None:
     not_readables = []
     for metadata_name in available_metadata:
-        
         try: 
             metadata_value = getattr(tif, metadata_name)
-            if metadata_value is not None:
+            if metadata_value is not None and (ignore_metadata is None or metadata_name not in ignore_metadata):
                 print(f"  Found available metadata '{metadata_name}' which is not yet implemented. Please contact")
                 print(f"    the developers at https://github.com/FabrizioMusacchio/omio/issues and provide")
                 print(f"    details and an example file. Please refer to the documentation for more information.")
@@ -1782,9 +1939,9 @@ def OME_metadata_checkup(metadata: dict,
     keep_keys = {
         "Annotations",           # handled explicitly
         "SizeX", "SizeY", "SizeZ", "SizeC", "SizeT",
-        "Channel_Count", "shape", "spacing", "unit",
-        # note: original_* keys are intentionally NOT in keep_keys,
-        # so that they are moved into Annotations
+        "Channel_Count", "shape", # "spacing", "unit",
+        # note: key starting with original_*  are intentionally NOT in 
+        # keep_keys, so that they are moved into Annotations
     }
 
     # work on a copy to avoid modifying the input in-place:
@@ -1831,11 +1988,12 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
     """
     Read TIFF family files into OMIO's canonical representation.
 
-    This function reads TIFF, OME-TIFF, and Zeiss LSM files using `tifffile`,
-    extracts available metadata (OME-XML, ImageJ metadata, and LSM metadata),
-    standardizes metadata keys, and normalizes axis handling to canonical OME order
-    TZCYX. Depending on configuration, the returned image is either a NumPy array in
-    RAM or a Zarr array backed by an in-memory or on-disk store.
+    This function reads TIFF, OME-TIFF, multi file OME-TIFF series, and 
+    Zeiss LSM files using `tifffile`, extracts available metadata (OME-XML, ImageJ 
+    metadata, and LSM metadata), standardizes metadata keys, and normalizes axis 
+    handling to canonical OME order TZCYX. Depending on configuration, the returned 
+    image is either a NumPy array in RAM or a Zarr array backed by an in-memory or 
+    on-disk store.
 
     If the input is a paginated TIFF or LSM (axis "P"), OMIO splits the dataset into
     individual pages and returns a list of images together with a list of matching
@@ -1902,6 +2060,13 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
       returned metadata.
     * When `zarr_store="disk"`, the function may create and overwrite paths under
       ``.omio_cache``.
+    * Multi-file OME-TIFF series are supported. In this layout, individual OME-TIFF
+      files each store subsets of the full dataset (e.g. single time points,
+      channels, or z-slices). OMIO/tifffile reconstructs the complete logical image by
+      following the OME-XML metadata references across files. It is therefore
+      sufficient to pass the path of a single file belonging to the series; all
+      referenced files are discovered and read implicitly. The resulting image is
+      returned as a contiguous and complete stack in canonical OME axis order.
     
     OMIO restrictions for multi-series TIFF/LSM files
     -------------------------------------------------
@@ -2123,7 +2288,9 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
         
         # check for not yet covered metadata and give feedback to user (if any):
         yet_covered_metadata = ["imagej_metadata", "ome_metadata", "lsm_metadata"]
-        _check_for_not_covered_metadata(tif, yet_covered_metadata)
+        ignore_metadata = ["shaped_metadata"]  # empirically, shaped_metadata this always contains 
+                                               # just the image shape, so we ignore it for now
+        _check_for_not_covered_metadata(tif, yet_covered_metadata, ignore_metadata)
         
         metadata = {}
         if ome_metadata is not None:
@@ -2133,9 +2300,8 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
             metadata = _add_file_properties_to_metadata(metadata, fname, original_metadata_type="OME_XML")
             #metadata["axes"], metadata["shape"] = _extract_axes_from_ome(ome_metadata) # this is actually obsolete, as we overwrite it later
         if imagej_metadata is not None:
-            md_ij = _standardize_imagej_metadata(imagej_metadata)
+            md_ij = _standardize_imagej_metadata(imagej_metadata, tags=tags, verbose=verbose)
             metadata.update(md_ij)
-            #metadata = _standardize_imagej_metadata(imagej_metadata) # correct lowercase keys
             metadata = _add_file_properties_to_metadata(metadata, fname, original_metadata_type="imagej_metadata")
         if lsm_metadata is not None:
             md_lsm = _standardize_lsm_metadata(lsm_metadata)
@@ -2220,10 +2386,13 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
         
         # fallback/ensure basic physical sizes exist:
         if "PhysicalSizeX" not in metadata:
+            print(f"WARNING: PhysicalSizeX missing in metadata; setting to default or user-provided value: {physicalsize_xyz_ext[0]}")
             metadata["PhysicalSizeX"] = physicalsize_xyz_ext[0]
         if "PhysicalSizeY" not in metadata:
+            print(f"WARNING: PhysicalSizeY missing in metadata; setting to default or user-provided value: {physicalsize_xyz_ext[1]}")
             metadata["PhysicalSizeY"] = physicalsize_xyz_ext[1]
         if "PhysicalSizeZ" not in metadata:
+            print(f"WARNING: PhysicalSizeZ missing in metadata; setting to default or user-provided value: {physicalsize_xyz_ext[2]}")
             metadata["PhysicalSizeZ"] = physicalsize_xyz_ext[2]
         
         # annotate OMIO multi-series policy in metadata
@@ -2304,7 +2473,6 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
             image_shape = image.shape
             metadata = _ensure_shape_in_metadata(metadata, image_shape)
         
-
         # handle paginated TIFFs (axis 'P'):
         if "P" in metadata["axes"]:
             axis_to_use = "P"
@@ -2420,7 +2588,6 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
                 print("Reading paginated TIFF completed.")
             return images, metadatas
 
-        
         # normal single-stack TIFF handling:
         metadata = _get_ome_image_sizes(image.shape, metadata)
 
@@ -2439,8 +2606,18 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
             metadata["PhysicalSizeZ"] = 1
 
         metadata["spacing"] = metadata["PhysicalSizeZ"]
-        metadata["PhysicalSizeXUnit"] = metadata["unit"]
-        metadata["PhysicalSizeYUnit"] = metadata["unit"]
+        if metadata["PhysicalSizeXUnit"] is None:
+            metadata["PhysicalSizeXUnit"] = metadata["unit"]
+        if metadata["PhysicalSizeYUnit"] is None:
+            metadata["PhysicalSizeYUnit"] = metadata["unit"]
+        if metadata["PhysicalSizeZUnit"] is None:
+            metadata["PhysicalSizeZUnit"] = metadata["unit"]
+        if metadata["PhysicalSizeXUnit"] =="inch" or metadata["PhysicalSizeYUnit"] =="inch" or metadata["PhysicalSizeZUnit"] =="inch":
+            # print a warning, as inch is not a typical unit for microscopy images:
+            print("WARNING: read_tif detected pixel unit 'inch', which is unusual for microscopy images.")
+            print("         This can happen when ImageJ metadata is missing, could not be read correctly, or")
+            print("         old metadata conventions were used. Please verify the returned physical pixel")
+            print("          sizes in the original metadata.")
         metadata["OMIO_VERSION"] = _OMIO_VERSION
 
         # correct for OME axes order:
@@ -4808,7 +4985,16 @@ def open_in_napari(images: Union[np.ndarray, "zarr.core.array.Array", list[Union
         napari_axess.append(napari_axes)
     
     if verbose:
-        print("All images opened in napari.")
+        print(f"Opened {len(images)} image(s) with scales:")
+        if type(layers[0]) is list:
+            layer_to_iterate = layers[0]
+        else:
+            layer_to_iterate = layers
+        for i, layer in enumerate(layer_to_iterate):
+            # i = 0
+            # layer = layers[0][i]
+            print(f"  Layer {i}: name='{layer.name}', scale={layer.scale}, shape={layer.data.shape}")
+        #print("All images opened in napari.")
     if returns:
         return viewer, layers, napari_datas, napari_axess
 
