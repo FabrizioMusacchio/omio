@@ -1785,6 +1785,93 @@ def _load_yaml_metadata(yaml_path):
         raise ValueError(f"YAML file {yaml_path} must contain a mapping/dict at top-level.")
     return data
 
+# function that creates a dummy YAML files at fname's folder with the required keys:
+def create_thorlabs_raw_yaml(fname: str,
+                             T: int = 1, Z: int = 1, C: int = 1, Y: int = 1024, X: int=1024, bits: int = 16,
+                             physicalsize_xyz: Union[tuple, list, None] = None, 
+                             pixelunit: str = "micron",
+                             time_increment: Union[float, None] = None, time_increment_unit: Union[str, None] = None,
+                             annotations: Union[dict, None] = None, verbose: bool = True):
+    """
+    Create a dummy YAML file with the required keys for Thorlabs RAW metadata.
+    This utility generates a YAML file in the same folder as the specified RAW file
+    (`fname`) containing the necessary keys for reading the RAW file with
+    `read_thorlabs_raw`. The generated YAML file serves as a metadata source when
+    no XML metadata is available.
+    Parameters
+    ----------
+    fname : str
+        Path to the Thorlabs RAW file. The YAML file will be created in the same
+        folder.
+    T : int
+        Number of time points. Default is 1.
+    Z : int
+        Number of Z slices. Default is 1.
+    C : int
+        Number of channels. Default is 1.
+    Y : int
+        Image height in pixels. Default is 1024.
+    X : int
+        Image width in pixels. Default is 1024.
+    bits : int
+        Bit depth per pixel (e.g., 8, 16, 32). Default is 16.
+    physicalsize_xyz : tuple of float or None, optional
+        Voxel sizes in the order ``(PhysicalSizeX, PhysicalSizeY, PhysicalSizeZ)``.
+        Default is None.    
+    pixelunit : str, optional
+        Unit string for pixel sizes. Default is ``"micron"``.
+    time_increment : float or None, optional
+        Time increment between frames. Default is None.
+    time_increment_unit : str or None, optional
+        Unit for the time increment. Default is None.
+    annotations : dict or None, optional
+        Additional key-value pairs to include in the YAML file. Default is None.
+    verbose : bool, optional
+        If True, print diagnostic messages. Default is True.
+    Returns
+    -------
+    None
+    Raises
+    ------
+    IOError
+        If the YAML file cannot be written. 
+        
+    Notes
+    -----
+    * The generated YAML file includes the required keys for Thorlabs RAW reading.
+    * Additional annotations can be included via the `annotations` parameter.
+    """ 
+    
+    folder = os.path.dirname(fname)
+    fname_base, _ = os.path.splitext(os.path.basename(fname))
+    yaml_path = os.path.join(folder, fname_base + "_metadata.yaml")
+    ymd = {
+        "T": T,
+        "Z": Z,
+        "C": C,
+        "Y": Y,
+        "X": X,
+        "bits": bits,
+    }
+    if physicalsize_xyz is not None:
+        ymd["PhysicalSizeX"] = physicalsize_xyz[0]
+        ymd["PhysicalSizeY"] = physicalsize_xyz[1]
+        ymd["PhysicalSizeZ"] = physicalsize_xyz[2]
+    if pixelunit is not None:
+        ymd["PixelUnit"] = pixelunit
+    if time_increment is not None:
+        ymd["TimeIncrement"] = time_increment
+    if time_increment_unit is not None:
+        ymd["TimeIncrementUnit"] = time_increment_unit
+    if annotations is not None:
+        ymd.update(annotations)
+
+    with open(yaml_path, "w") as f:
+        yaml.dump(ymd, f)
+
+    if verbose:
+        print(f"Created dummy YAML metadata file at {yaml_path}")
+
 # function to require integer from dictionary (for housekeeping):
 def _require_int(d, key):
     """
@@ -2902,6 +2989,10 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
     Saved as e.g. ``image_metadata.yaml`` in the same folder as the RAW file,
     this file allows read_thorlabs_raw to successfully interpret the RAW pixel.
     
+    OMIO offers a utility function to help create such YAML files:
+    ``omio.utilities.create_thorlabs_raw_yaml()``, which prompts the user for
+    the necessary parameters and writes the YAML file (or takes defaults).
+    
     Note: The values entered in the YAML file must match the actual RAW data size.
     I.e., the user must know the correct dimensions and bit depth in advance.
 
@@ -3209,7 +3300,9 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
             "No Thorlabs XML metadata and no YAML fallback found. \n"
             "   Cannot infer RAW dimensions (T, Z, C, Y, X, bits). Create a YAML file in the same folder as the RAW\n"
             "   file with keys: T, Z, C, Y, X, bits (and optionally pixelunit, PhysicalSizeX/Y/Z, TimeIncrement,\n"
-            "   TimeIncrementUnit). Please refer to the documentation for details.")
+            "   TimeIncrementUnit). Please refer to the documentation for details.\n",
+            "   You may also use the utility function create_thorlabs_raw_yaml(fname) to create an empty YAML file\n",
+            "   template that you can fill in manually. It will be created in the same folder as the RAW file.")
         print("Example YAML content (save as, e.g., Experiment.yaml into the same folder as the RAW file):\nT: 1\nZ: 1\nC: 1\nY: 512\nX: 512\nbits: 16\npixelunit: micron\nPhysicalSizeX: 0.5\nPhysicalSizeY: 0.5\nPhysicalSizeZ: 1.0\nTimeIncrement: 1.0\nTimeIncrementUnit: seconds")
         if return_list:
             return [None], [None]
@@ -3341,92 +3434,6 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
         return [image], [metadata]
     return image, metadata
 
-# TODO: write a function that creates a dummy YAML files at fname's folder with the required keys:
-def create_thorlabs_raw_yaml(fname: str,
-                             T: int = 1, Z: int = 1, C: int = 1, Y: int = 1024, X: int=1024, bits: int = 16,
-                             physicalsize_xyz: Union[tuple, list, None] = None, 
-                             pixelunit: str = "micron",
-                             time_increment: Union[float, None] = None, time_increment_unit: Union[str, None] = None,
-                             annotations: Union[dict, None] = None, verbose: bool = True):
-    """
-    Create a dummy YAML file with the required keys for Thorlabs RAW metadata.
-    This utility generates a YAML file in the same folder as the specified RAW file
-    (`fname`) containing the necessary keys for reading the RAW file with
-    `read_thorlabs_raw`. The generated YAML file serves as a metadata source when
-    no XML metadata is available.
-    Parameters
-    ----------
-    fname : str
-        Path to the Thorlabs RAW file. The YAML file will be created in the same
-        folder.
-    T : int
-        Number of time points. Default is 1.
-    Z : int
-        Number of Z slices. Default is 1.
-    C : int
-        Number of channels. Default is 1.
-    Y : int
-        Image height in pixels. Default is 1024.
-    X : int
-        Image width in pixels. Default is 1024.
-    bits : int
-        Bit depth per pixel (e.g., 8, 16, 32). Default is 16.
-    physicalsize_xyz : tuple of float or None, optional
-        Voxel sizes in the order ``(PhysicalSizeX, PhysicalSizeY, PhysicalSizeZ)``.
-        Default is None.    
-    pixelunit : str, optional
-        Unit string for pixel sizes. Default is ``"micron"``.
-    time_increment : float or None, optional
-        Time increment between frames. Default is None.
-    time_increment_unit : str or None, optional
-        Unit for the time increment. Default is None.
-    annotations : dict or None, optional
-        Additional key-value pairs to include in the YAML file. Default is None.
-    verbose : bool, optional
-        If True, print diagnostic messages. Default is True.
-    Returns
-    -------
-    None
-    Raises
-    ------
-    IOError
-        If the YAML file cannot be written. 
-        
-    Notes
-    -----
-    * The generated YAML file includes the required keys for Thorlabs RAW reading.
-    * Additional annotations can be included via the `annotations` parameter.
-    """ 
-    
-    folder = os.path.dirname(fname)
-    fname_base, _ = os.path.splitext(os.path.basename(fname))
-    yaml_path = os.path.join(folder, fname_base + "_metadata.yaml")
-    ymd = {
-        "T": T,
-        "Z": Z,
-        "C": C,
-        "Y": Y,
-        "X": X,
-        "bits": bits,
-    }
-    if physicalsize_xyz is not None:
-        ymd["PhysicalSizeX"] = physicalsize_xyz[0]
-        ymd["PhysicalSizeY"] = physicalsize_xyz[1]
-        ymd["PhysicalSizeZ"] = physicalsize_xyz[2]
-    if pixelunit is not None:
-        ymd["PixelUnit"] = pixelunit
-    if time_increment is not None:
-        ymd["TimeIncrement"] = time_increment
-    if time_increment_unit is not None:
-        ymd["TimeIncrementUnit"] = time_increment_unit
-    if annotations is not None:
-        ymd.update(annotations)
-
-    with open(yaml_path, "w") as f:
-        yaml.dump(ymd, f)
-
-    if verbose:
-        print(f"Created dummy YAML metadata file at {yaml_path}")
 
 # %% OMIO_CACHE CLEANUP FUNCTION
 
