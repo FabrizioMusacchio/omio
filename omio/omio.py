@@ -103,6 +103,7 @@ mamba install -y ipython ipykernel numpy zarr numcodecs tqdm czifile tifffile na
 """
 # %% IMPORTS
 import os, re
+import hashlib
 
 from importlib.metadata import version, PackageNotFoundError, packages_distributions
 
@@ -3340,6 +3341,93 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
         return [image], [metadata]
     return image, metadata
 
+# TODO: write a function that creates a dummy YAML files at fname's folder with the required keys:
+def create_thorlabs_raw_yaml(fname: str,
+                             T: int = 1, Z: int = 1, C: int = 1, Y: int = 1024, X: int=1024, bits: int = 16,
+                             physicalsize_xyz: Union[tuple, list, None] = None, 
+                             pixelunit: str = "micron",
+                             time_increment: Union[float, None] = None, time_increment_unit: Union[str, None] = None,
+                             annotations: Union[dict, None] = None, verbose: bool = True):
+    """
+    Create a dummy YAML file with the required keys for Thorlabs RAW metadata.
+    This utility generates a YAML file in the same folder as the specified RAW file
+    (`fname`) containing the necessary keys for reading the RAW file with
+    `read_thorlabs_raw`. The generated YAML file serves as a metadata source when
+    no XML metadata is available.
+    Parameters
+    ----------
+    fname : str
+        Path to the Thorlabs RAW file. The YAML file will be created in the same
+        folder.
+    T : int
+        Number of time points. Default is 1.
+    Z : int
+        Number of Z slices. Default is 1.
+    C : int
+        Number of channels. Default is 1.
+    Y : int
+        Image height in pixels. Default is 1024.
+    X : int
+        Image width in pixels. Default is 1024.
+    bits : int
+        Bit depth per pixel (e.g., 8, 16, 32). Default is 16.
+    physicalsize_xyz : tuple of float or None, optional
+        Voxel sizes in the order ``(PhysicalSizeX, PhysicalSizeY, PhysicalSizeZ)``.
+        Default is None.    
+    pixelunit : str, optional
+        Unit string for pixel sizes. Default is ``"micron"``.
+    time_increment : float or None, optional
+        Time increment between frames. Default is None.
+    time_increment_unit : str or None, optional
+        Unit for the time increment. Default is None.
+    annotations : dict or None, optional
+        Additional key-value pairs to include in the YAML file. Default is None.
+    verbose : bool, optional
+        If True, print diagnostic messages. Default is True.
+    Returns
+    -------
+    None
+    Raises
+    ------
+    IOError
+        If the YAML file cannot be written. 
+        
+    Notes
+    -----
+    * The generated YAML file includes the required keys for Thorlabs RAW reading.
+    * Additional annotations can be included via the `annotations` parameter.
+    """ 
+    
+    folder = os.path.dirname(fname)
+    fname_base, _ = os.path.splitext(os.path.basename(fname))
+    yaml_path = os.path.join(folder, fname_base + "_metadata.yaml")
+    ymd = {
+        "T": T,
+        "Z": Z,
+        "C": C,
+        "Y": Y,
+        "X": X,
+        "bits": bits,
+    }
+    if physicalsize_xyz is not None:
+        ymd["PhysicalSizeX"] = physicalsize_xyz[0]
+        ymd["PhysicalSizeY"] = physicalsize_xyz[1]
+        ymd["PhysicalSizeZ"] = physicalsize_xyz[2]
+    if pixelunit is not None:
+        ymd["PixelUnit"] = pixelunit
+    if time_increment is not None:
+        ymd["TimeIncrement"] = time_increment
+    if time_increment_unit is not None:
+        ymd["TimeIncrementUnit"] = time_increment_unit
+    if annotations is not None:
+        ymd.update(annotations)
+
+    with open(yaml_path, "w") as f:
+        yaml.dump(ymd, f)
+
+    if verbose:
+        print(f"Created dummy YAML metadata file at {yaml_path}")
+
 # %% OMIO_CACHE CLEANUP FUNCTION
 
 def cleanup_omio_cache(fname, full_cleanup=False, verbose=True):
@@ -6254,6 +6342,104 @@ def _dispatch_read_file(path: str,
             verbose=verbose)
 
     raise ValueError(f"Unsupported file extension '{_lower_ext(lp)}' for path: {path}")
+# functions to detect and collapse OME multifile series:
+_UUID_FILENAME_RE = re.compile(r'FileName="([^"]+)"')
+def _ome_referenced_basenames(tif_path: str) -> list[str]:
+    """
+    Return list of basenames referenced via FileName="..." in OME-XML.
+    Does not trigger multifile loading.
+    """
+    try:
+        with tifffile.TiffFile(tif_path, _multifile=False) as tif:
+            ome = tif.ome_metadata
+    except Exception:
+        return []
+    if not ome:
+        return []
+    refs = _UUID_FILENAME_RE.findall(ome)
+    return [os.path.basename(r) for r in refs]
+class _UnionFind:
+    def __init__(self):
+        self.parent = {}
+
+    def find(self, x):
+        self.parent.setdefault(x, x)
+        if self.parent[x] != x:
+            self.parent[x] = self.find(self.parent[x])
+        return self.parent[x]
+
+    def union(self, a, b):
+        ra, rb = self.find(a), self.find(b)
+        if ra != rb:
+            self.parent[rb] = ra
+def _collapse_ome_multifile_series(files: list[str], verbose: bool = True) -> list[str]:
+    """
+    Keep only one representative per OME multifile series.
+    Groups files by OME-XML connectivity (connected components).
+    Works if only some member files contain OME-XML and if refs are partial.
+    """
+    if not files:
+        return []
+
+    # Map basename -> all full paths seen (basename collisions are possible, keep list)
+    base_to_paths: dict[str, list[str]] = {}
+    for f in files:
+        base_to_paths.setdefault(os.path.basename(f), []).append(f)
+
+    uf = _UnionFind()
+
+    # Build connectivity graph: file_basename <-> referenced_basename
+    for f in files:
+        b = os.path.basename(f)
+        refs = _ome_referenced_basenames(f)
+        if not refs:
+            continue
+        for r in refs:
+            # Only union if the referenced file exists among discovered files
+            if r in base_to_paths:
+                uf.union(b, r)
+
+    # Collect components
+    comp: dict[str, set[str]] = {}
+    for b in base_to_paths.keys():
+        root = uf.find(b)
+        comp.setdefault(root, set()).add(b)
+
+    representatives: list[str] = []
+    skipped = 0
+
+    for root, members in comp.items():
+        if len(members) == 1:
+            # singletons: keep all their concrete paths (could be basename collisions)
+            b = next(iter(members))
+            representatives.extend(base_to_paths[b])
+            continue
+
+        # Multifile component: choose deterministic representative path
+        # Pick lexicographically smallest basename, then lexicographically smallest full path for that basename
+        members_sorted = sorted(members)
+        rep_base = members_sorted[0]
+        rep_path = sorted(base_to_paths[rep_base])[0]
+        representatives.append(rep_path)
+
+        # Skip all other members
+        for b in members_sorted[1:]:
+            skipped += len(base_to_paths[b])
+
+        if verbose:
+            print(
+                f"Detected OME multifile series with {sum(len(base_to_paths[b]) for b in members_sorted)} files "
+                f"({len(members_sorted)} unique basenames). Using representative: {os.path.basename(rep_path)}"
+            )
+
+    if verbose and skipped:
+        print(f"Skipped {skipped} files that belong to already detected OME multifile series.")
+
+    # Preserve original order as much as possible: sort representatives by their first occurrence in `files`
+    pos = {p: i for i, p in enumerate(files)}
+    representatives.sort(key=lambda p: pos.get(p, 10**12))
+
+    return representatives
 
 # OMIO's main universal image reader:
 def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
@@ -6267,6 +6453,7 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
          zeropadding: bool = True,
          physicalsize_xyz: Union[None, Any] = None,
          pixelunit: str = "micron",
+         collapse_ome_multifile_series: bool = True,
          verbose: bool = True,
          ) -> Union[
              Tuple[Any, Dict[str, Any]],
@@ -6350,6 +6537,9 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     pixelunit : str, optional
         Unit string forwarded to readers for unit normalization and defaults. Default is
         "micron".
+    collapse_ome_multifile_series : bool, optional
+        If True, detect OME multifile series and keep only one representative file per
+        series to avoid duplicate loading. Default is True.
     verbose : bool, optional
         If True, print diagnostic progress messages. Default is True.
 
@@ -6374,7 +6564,7 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
                          f"Got: {merge_along_axis!r}")
 
     allowed_ext = {".tif", ".tiff", ".lsm", ".czi", ".raw", ".ome.tif", ".ome.tiff"}
-    # maybe we shift this variable to a module-level global later
+    # TODO: maybe we shift this variable to a module-level global later
 
     paths = _normalize_to_list(fname)
 
@@ -6481,6 +6671,8 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
 
         # default folder behavior: read all image files in folder:
         files = _list_image_files_in_folder(folder, allowed_ext=allowed_ext, recursive=recursive)
+        if collapse_ome_multifile_series:
+            files = _collapse_ome_multifile_series(files, verbose=verbose)
         if not files:
             return ([], []) if return_list else (None, {})
 
@@ -6552,6 +6744,7 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
          merge_folder_stacks: bool = False,
          merge_multiple_files_in_folder: bool = False,
          merge_along_axis: str = "T",
+         collapse_ome_multifile_series: bool = True,
          zeropadding: bool = True,
          physicalsize_xyz: Union[None, Any] = None,
          pixelunit: str = "micron",
@@ -6655,6 +6848,9 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
         single OME TIFF. Default is False.
     merge_along_axis : {"T", "Z", "C"}, optional
         Axis along which concatenation is performed in merge modes. Default is "T".
+    collapse_ome_multifile_series : bool, optional
+        If True, detect OME multifile series and keep only one representative file per
+        series to avoid duplicate loading. Default is True.
     zeropadding : bool, optional
         Allow padding of non merge axes during merges. Default is True.
     physicalsize_xyz : Any or None, optional
@@ -6704,6 +6900,7 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
         merge_folder_stacks=merge_folder_stacks,
         merge_multiple_files_in_folder=merge_multiple_files_in_folder,
         merge_along_axis=merge_along_axis,
+        collapse_ome_multifile_series=collapse_ome_multifile_series,
         zeropadding=zeropadding,
         physicalsize_xyz=physicalsize_xyz,
         pixelunit=pixelunit,
@@ -6809,6 +7006,7 @@ def bids_batch_convert(
     merge_multiple_files_in_folder: bool = False,
     merge_tagfolders: bool = False,          # if tagfolder is not None: merge TAGFOLDER_01..N into one output
     merge_along_axis: str = "T",
+    collapse_ome_multifile_series: bool = True,
     zeropadding: bool = True,
     zarr_store: str | None = None,
     recursive: bool = False,
@@ -6974,6 +7172,9 @@ def bids_batch_convert(
         If tagfolder is set, optionally merge all detected tagfolders into a single output.
     merge_along_axis : {"T","Z","C"}
         Axis along which merges are performed.
+    collapse_ome_multifile_series : bool
+        If True, detect and collapse OME multifile series during reading to avoid
+        duplicate loading. 
     zeropadding : bool
         If True, allow mismatched non-merge axes by padding with zeros before merging.
     zarr_store : {None,"memory","disk"}
@@ -7184,6 +7385,7 @@ def bids_batch_convert(
                     merge_folder_stacks=True,    # triggers reading of all tagfolders and merging
                     merge_multiple_files_in_folder=False,
                     merge_along_axis=merge_along_axis,
+                    collapse_ome_multifile_series=collapse_ome_multifile_series,
                     zeropadding=zeropadding,
                     physicalsize_xyz=physicalsize_xyz,
                     pixelunit=pixelunit,
