@@ -241,7 +241,7 @@ Its purpose is to provide a **reliable, explicit, and reproducible I/O layer** o
 ## Currently supported file formats and dependencies
 At the moment, OMIO supports reading the following microscopy file formats:
 
-* TIF, ImageJ TIFF, OME-TIFF (`*.tif`, `*.tiff`, `*.ome.tif`, `*.ome.tiff`)
+* TIF, ImageJ TIFF, OME-TIFF, multi file OME-TIFF series (`*.tif`, `*.tiff`, `*.ome.tif`, `*.ome.tiff`)
 * Zeiss LSM (`*.lsm`)
 * Zeiss CZI (`*.czi`)
 * Thorlabs RAW binary files incl. Experiment.xml (`*.raw` + `*.xml`)
