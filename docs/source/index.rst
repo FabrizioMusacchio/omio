@@ -12,14 +12,9 @@ normalization, and memory-aware data handling across NumPy, Zarr, Dask,
 napari, and OME-TIFF.
 
 **NOTE:** OMIO is **currently under active development**. The API and 
-feature set may change in future releases.
-
-This documentation provides:
-
-* an overview of the pipeline and its scientific context,
-* installation and basic usage instructions,
-* a detailed description of the processing steps and parameters,
-* an automatically generated API reference.
+feature set may change in future releases. We also welcome feedback, feature 
+requests, and contributions via `GitHub issues <https://github.com/FabrizioMusacchio/omio/issues>`_. 
+Please report any bugs or inconsistencies you encounter.
 
 
 .. toctree::
