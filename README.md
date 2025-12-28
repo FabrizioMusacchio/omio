@@ -183,6 +183,7 @@ OMIO detects subjects, experiments, and optional tag folders via user-defined ma
 OMIO's core functions are:
 
 * `imread()`: read images from files or folders,
+* `imwrite()`: write images to OME-TIFF,
 * `imconvert()`: convert images to OME-TIFF,
 * `bids_batch_convert()`: batch-convert BIDS-like projects,
 * `open_in_napari()`: visualize images in napari,
