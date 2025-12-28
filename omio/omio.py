@@ -2155,6 +2155,43 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
       sufficient to pass the path of a single file belonging to the series; all
       referenced files are discovered and read implicitly. The resulting image is
       returned as a contiguous and complete stack in canonical OME axis order.
+      
+    General note on series and pages
+    --------------------------------
+    TIFF family containers can store data in two different structural layers that are 
+    easy to confuse:
+
+    * Series are top level image datasets within a container. Each series can have its 
+      own dimensionality, axis semantics, pixel type, and metadata context. In tifffile, 
+      these are exposed via `tif.series`.
+    * Pages are the lower level IFD entries that physically store image planes or tiles. 
+      Depending on the file layout, pages can represent planes along Z, C, or T, pyramid 
+      levels, tiles, or other internal subdivisions. In tifffile, these are exposed via 
+      `tif.pages`.
+
+    In many microscopy TIFF variants, tifffile reconstructs a logical N dimensional array 
+    for a series by reading and stacking its pages. The exact mapping depends on the file 
+    and on tifffile’s internal interpretation of the container structure. OMIO therefore 
+    treats `tif.series` as the authoritative high level grouping and applies explicit, 
+    deterministic policies where the container structure could otherwise lead to ambiguous 
+    outcomes.
+
+    OMIO behavior for paginated files
+    ----------------------------------
+    Some TIFF and LSM files are stored as paginated stacks and expose an explicit pagination 
+    axis `P` in the inferred axis string. OMIO treats pagination as a semantic split into 
+    independent image stacks:
+
+    * If the input is detected as paginated (axis `P` present), OMIO splits the dataset into 
+      per page images and returns `images` and `metadatas` as lists with matching length.
+    * Lists are returned regardless of `return_list`, because a single object return would be 
+      semantically ambiguous once pagination is present.
+    * Each returned metadata dictionary corresponds to exactly one page and reflects the page 
+      specific axis string with the pagination axis removed.
+    * If `zarr_store` is set, each page is materialized into its own Zarr array according to 
+      the selected backend (memory or disk).
+    * After splitting, OMIO applies axis normalization to each page so that each page is 
+      returned in canonical OME axis order.
     
     OMIO restrictions for multi-series TIFF/LSM files
     -------------------------------------------------
@@ -3296,14 +3333,14 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
     
     # if neither XML nor YAML provided dimensions, do not abort. Warn and return None:
     if dims is None:
-        warnings.warn(
-            "No Thorlabs XML metadata and no YAML fallback found. \n"
-            "   Cannot infer RAW dimensions (T, Z, C, Y, X, bits). Create a YAML file in the same folder as the RAW\n"
-            "   file with keys: T, Z, C, Y, X, bits (and optionally pixelunit, PhysicalSizeX/Y/Z, TimeIncrement,\n"
-            "   TimeIncrementUnit). Please refer to the documentation for details.\n",
-            "   You may also use the utility function create_thorlabs_raw_yaml(fname) to create an empty YAML file\n",
-            "   template that you can fill in manually. It will be created in the same folder as the RAW file.")
-        print("Example YAML content (save as, e.g., Experiment.yaml into the same folder as the RAW file):\nT: 1\nZ: 1\nC: 1\nY: 512\nX: 512\nbits: 16\npixelunit: micron\nPhysicalSizeX: 0.5\nPhysicalSizeY: 0.5\nPhysicalSizeZ: 1.0\nTimeIncrement: 1.0\nTimeIncrementUnit: seconds")
+        print("WARNING: No Thorlabs XML metadata and no YAML fallback found.\n"
+              "         Cannot infer RAW dimensions (T, Z, C, Y, X, bits). Create a YAML file in the same folder as the RAW\n"
+              "         file with keys: T, Z, C, Y, X, bits (and optionally pixelunit, PhysicalSizeX/Y/Z, TimeIncrement,\n"
+              "         TimeIncrementUnit). Please refer to the documentation for details.\n"
+              "         You may also use the utility function create_thorlabs_raw_yaml(fname) to create an empty YAML file\n"
+              "         template that you can fill in manually. It will be created in the same folder as the RAW file.\n")
+        print("         Example YAML content (save as, e.g., Experiment.yaml into the same folder as the RAW file):\n\n           T: 1\n           Z: 1\n           C: 1\n           Y: 512\n           X: 512\n           bits: 16\n           pixelunit: micron\n           PhysicalSizeX: 0.5\n           PhysicalSizeY: 0.5\n           PhysicalSizeZ: 1.0\n           TimeIncrement: 1.0\n           TimeIncrementUnit: seconds\n")
+        print("         You may also use omio.create_thorlabs_raw_yaml(fname) to generate such a file interactively.\n")
         if return_list:
             return [None], [None]
         return None, None
@@ -3433,7 +3470,6 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
     if return_list:
         return [image], [metadata]
     return image, metadata
-
 
 # %% OMIO_CACHE CLEANUP FUNCTION
 
@@ -4438,7 +4474,7 @@ def write_ometiff(fname: str,
 # %% NAPARI-VIEWER CONVENIENCE FUNCTIONS
 
 # function for squeezing a Zarr array for Napari visualization:
-def _squeeze_zarr_to_napari_cache(src, fname, axes="TZCYXS", cache_folder_name=".omio_cache"):
+def _squeeze_zarr_to_napari_cache_OLD(src, fname, axes="TZCYXS", cache_folder_name=".omio_cache"):
     """
     Create a squeezed on-disk Zarr view for Napari visualization.
 
@@ -4504,7 +4540,10 @@ def _squeeze_zarr_to_napari_cache(src, fname, axes="TZCYXS", cache_folder_name="
     if len(axes_list) != len(src_shape):
         raise ValueError(f"axes length {len(axes_list)} does not match src.ndim {len(src_shape)}")
 
-    keep_indices = [i for i, dim in enumerate(src_shape) if dim > 1]
+    # keep all non singleton axes, but never drop Y or X even if singleton:
+    # keep_indices = [i for i, dim in enumerate(src_shape) if dim > 1]
+    keep_indices = [i for i, dim in enumerate(src_shape)
+                    if (dim > 1) or (axes_list[i] in ("Y", "X"))]
     squeezed_axes = "".join(axes_list[i] for i in keep_indices)
     squeezed_shape = tuple(src_shape[i] for i in keep_indices)
 
@@ -4576,6 +4615,93 @@ def _squeeze_zarr_to_napari_cache(src, fname, axes="TZCYXS", cache_folder_name="
                 else:
                     src_idx.append(next(outer_idx_iter))
         dst[dst_idx] = src[tuple(src_idx)]
+
+    return dst, squeezed_axes
+def _squeeze_zarr_to_napari_cache(src, fname, axes="TZCYXS", cache_folder_name=".omio_cache"):
+
+    if not isinstance(src, zarr.core.array.Array):
+        raise TypeError("_squeeze_zarr_to_napari_cache expects a zarr.core.Array as `src`.")
+
+    src_shape = src.shape
+    axes_list = list(axes)
+    if len(axes_list) != len(src_shape):
+        raise ValueError(f"axes length {len(axes_list)} does not match src.ndim {len(src_shape)}")
+
+    # keep all non singleton axes, but never drop Y or X even if singleton
+    keep_indices = [i for i, dim in enumerate(src_shape)
+                    if (dim > 1) or (axes_list[i] in ("Y", "X"))]
+
+    squeezed_axes = "".join(axes_list[i] for i in keep_indices)
+    squeezed_shape = tuple(src_shape[i] for i in keep_indices)
+
+    napari_zarr_path = fname
+    if os.path.exists(napari_zarr_path):
+        shutil.rmtree(napari_zarr_path)
+
+    if src.chunks is not None:
+        squeezed_chunks = tuple(src.chunks[i] for i in keep_indices)
+    else:
+        squeezed_chunks = None
+
+    dst = zarr.open(
+        napari_zarr_path,
+        mode="w",
+        shape=squeezed_shape,
+        dtype=src.dtype,
+        chunks=squeezed_chunks)
+
+    # copy shortcut for 2D or less
+    if len(squeezed_shape) <= 2:
+        src_idx = []
+        for i, dim in enumerate(src_shape):
+            if i in keep_indices:
+                src_idx.append(slice(None))
+            else:
+                src_idx.append(0)
+        dst[...] = src[tuple(src_idx)]
+        return dst, squeezed_axes
+
+    # determine positions of spatial axes inside the squeezed representation
+    y_pos = squeezed_axes.find("Y")
+    x_pos = squeezed_axes.find("X")
+    if y_pos < 0 or x_pos < 0:
+        raise ValueError("Squeezed axes must contain Y and X.")
+
+    # outer axes are all except Y and X
+    outer_axes_positions = [i for i in range(len(squeezed_axes)) if i not in (y_pos, x_pos)]
+    outer_shape = tuple(squeezed_shape[i] for i in outer_axes_positions)
+    total_outer = int(np.prod(outer_shape)) if outer_shape else 1
+
+    # build mapping from squeezed positions to original indices
+    squeezed_to_orig = {sq_i: orig_i for sq_i, orig_i in enumerate(keep_indices)}
+
+    for outer_idx in tqdm(
+        np.ndindex(*outer_shape) if outer_shape else [()],
+        total=total_outer,
+        desc="creating Napari view Zarr (squeezed)"
+    ):
+        # build dst index in squeezed space
+        dst_idx = [0] * len(squeezed_shape)
+
+        # fill outer axes indices
+        for pos, val in zip(outer_axes_positions, outer_idx):
+            dst_idx[pos] = val
+
+        # set Y and X to full slices
+        dst_idx[y_pos] = slice(None)
+        dst_idx[x_pos] = slice(None)
+
+        # now build src index in original space
+        src_idx = [0] * len(src_shape)
+        for sq_pos in range(len(squeezed_axes)):
+            orig_pos = squeezed_to_orig[sq_pos]
+            ax = squeezed_axes[sq_pos]
+            if ax in ("Y", "X"):
+                src_idx[orig_pos] = slice(None)
+            else:
+                src_idx[orig_pos] = dst_idx[sq_pos]
+
+        dst[tuple(dst_idx)] = src[tuple(src_idx)]
 
     return dst, squeezed_axes
 # function to get channel axis from axes and shape:
@@ -4678,7 +4804,48 @@ def _get_scales_from_axes_and_metadata(axes, metadata):
             scales.append(1.0)
     return tuple(scales)
 # function for squeezing a Zarr array for Napari visualization using Dask:
-def _squeeze_zarr_to_napari_cache_dask(src, fname, axes, cache_folder_name=".omio_cache"):
+def _squeeze_numpy_keep_yx(image_np: np.ndarray, axes_full: str) -> tuple[np.ndarray, str]:
+    """ 
+    Squeeze a NumPy array by removing singleton axes except for Y and X.
+    
+    This helper removes all singleton dimensions from a NumPy array while preserving
+    the Y and X axes, even if they are singleton. The function also constructs an
+    updated axis string that reflects the new shape of the array.
+    
+    Parameters
+    ----------
+    image_np : np.ndarray
+        Input NumPy array to be squeezed.
+    axes_full : str
+        Full axis string corresponding to `image_np.shape`. This is typically an OME-like
+        axis declaration such as ``"TZCYXS"``.
+    Returns
+    -------
+    image_sq : np.ndarray
+        Squeezed NumPy array with singleton axes removed (except Y and X).
+    axes_sq : str
+        Updated axis string corresponding to `image_sq`.
+    """
+    if len(image_np.shape) != len(axes_full):
+        raise ValueError("NumPy image does not match expected OME axis length")
+
+    squeeze_axes = [
+        i for i, (ax, dim) in enumerate(zip(axes_full, image_np.shape))
+        if (dim == 1) and (ax not in ("Y", "X"))
+    ]
+
+    if squeeze_axes:
+        image_sq = np.squeeze(image_np, axis=tuple(squeeze_axes))
+    else:
+        image_sq = image_np
+
+    axes_sq = "".join(
+        ax for ax, dim in zip(axes_full, image_np.shape)
+        if (dim > 1) or (ax in ("Y", "X"))
+    )
+
+    return image_sq, axes_sq
+def _squeeze_zarr_to_napari_cache_dask_OLD(src, fname, axes, cache_folder_name=".omio_cache"):
     """
     Create a squeezed on-disk Zarr view for Napari using Dask.
 
@@ -4752,6 +4919,77 @@ def _squeeze_zarr_to_napari_cache_dask(src, fname, axes, cache_folder_name=".omi
     da.to_zarr(darr, target_path, zarr_read_kwargs={"mode": "w"})
 
     # return the new persistent Zarr array:
+    squeezed_zarr = zarr.open(target_path, mode="r")
+
+    return squeezed_zarr, squeezed_axes
+def _squeeze_zarr_to_napari_cache_dask(src, fname, axes, cache_folder_name=".omio_cache"):
+    """
+    Create a squeezed on-disk Zarr view for Napari using Dask.
+
+    This helper constructs a derived Zarr store in which all singleton dimensions of
+    a source Zarr array are removed. The computation is performed with Dask so that
+    the source array is not materialized fully in RAM. Instead, Dask streams chunks
+    from the input Zarr, applies ``squeeze`` lazily, and writes the result into a
+    new Zarr store under an OMIO cache folder.
+
+    The function also returns the corresponding squeezed axis string, obtained by
+    dropping axis labels whose dimensions were of length 1.
+
+    Parameters
+    ----------
+    src : zarr.core.array.Array
+        Source Zarr array. The array is expected to be OME-like ordered according to
+        `axes` (often ``"TZCYXS"``).
+    fname : str
+        Path used to derive the cache location. The squeezed Zarr store is written
+        into ``<dirname(fname)>/<cache_folder_name>/`` and named
+        ``<basename(fname)>_napari_squeezed.zarr``.
+    axes : str
+        Axis string corresponding to ``src.shape``.
+    cache_folder_name : str, optional
+        Name of the cache folder created alongside `fname`. Default is
+        ``".omio_cache"``.
+
+    Returns
+    -------
+    squeezed_zarr : zarr.core.array.Array
+        Newly created Zarr array stored on disk with all singleton axes removed.
+    squeezed_axes : str
+        Axis string corresponding to `squeezed_zarr`.
+
+    Notes
+    -----
+    * Any existing Zarr store at the target path is deleted and replaced.
+    * The write is performed via Dask’s Zarr writer to allow chunk-wise computation
+    and writing. This avoids reading the full source array into memory.
+    * The computed list of singleton axis indices is used only to derive the
+    returned axis string; the actual squeeze operation is performed by
+    ``da.squeeze``.
+    * This function creates a derived representation for visualization and does not
+    modify the source Zarr store.
+    """
+
+    base_dir = os.path.dirname(fname)
+    cache_dir = os.path.join(base_dir, cache_folder_name)
+    os.makedirs(cache_dir, exist_ok=True)
+
+    target_path = os.path.join(cache_dir, os.path.basename(fname) + "_napari_squeezed.zarr")
+    if os.path.exists(target_path):
+        shutil.rmtree(target_path)
+
+    darr = da.from_zarr(src)
+
+    # squeeze only singleton axes that are not Y or X:
+    squeeze_axes = [i for i, (ax, dim) in enumerate(zip(axes, src.shape))
+                    if (dim == 1) and (ax not in ("Y", "X"))]
+
+    squeezed_axes = "".join(ax for ax, dim in zip(axes, src.shape)
+                            if (dim > 1) or (ax in ("Y", "X")))
+
+    if squeeze_axes:
+        darr = da.squeeze(darr, axis=tuple(squeeze_axes))
+
+    da.to_zarr(darr, target_path, zarr_read_kwargs={"mode": "w"})
     squeezed_zarr = zarr.open(target_path, mode="r")
 
     return squeezed_zarr, squeezed_axes
@@ -4898,10 +5136,11 @@ def _single_image_open_in_napari(
             if verbose:
                 print("  Loading full Zarr into RAM as NumPy array...")
             image_np = np.asarray(image)
-            napari_data = image_np.squeeze()
             if len(image_np.shape) != len(axes_full):
                 raise ValueError("NumPy image does not match expected OME axis length")
-            napari_axes = "".join(ax for ax, dim in zip(axes_full, image_np.shape) if dim > 1)
+            #napari_data = image_np.squeeze()
+            napari_data, napari_axes = _squeeze_numpy_keep_yx(image_np, axes_full)
+            #napari_axes = "".join(ax for ax, dim in zip(axes_full, image_np.shape) if dim > 1)
         else:
             raise ValueError(
                 f"  _single_image_open_in_napari: unknown zarr_mode='{zarr_mode}'. "
@@ -4912,15 +5151,17 @@ def _single_image_open_in_napari(
         if verbose:
             print("  Input is NumPy array. Full loading into RAM (zarr_mode has no effect)...")
         image_np = np.asarray(image)
-        napari_data = image_np.squeeze()
-
         if len(image_np.shape) != len(axes_full):
             raise ValueError("  NumPy image does not match expected OME axis length")
-
-        napari_axes = "".join(
-            ax for ax, dim in zip(axes_full, image_np.shape) if dim > 1)
+        #napari_data = image_np.squeeze()
+        napari_data, napari_axes = _squeeze_numpy_keep_yx(image_np, axes_full)
+        #napari_axes = "".join(ax for ax, dim in zip(axes_full, image_np.shape) if dim > 1)
 
     # determine channel axis:
+    if len(napari_axes) != napari_data.ndim:
+        raise ValueError(
+            f"Internal error: napari_axes='{napari_axes}' (len={len(napari_axes)}) "
+            f"does not match napari_data.shape={napari_data.shape} (ndim={napari_data.ndim}).")
     channel_axis = _get_channel_axis_from_axes_and_shape(axes=napari_axes, 
                                                         shape=napari_data.shape, 
                                                         target_axis="C")
