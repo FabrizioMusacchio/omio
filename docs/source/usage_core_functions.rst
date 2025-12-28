@@ -30,7 +30,7 @@ as a dictionary.
 
 .. code-block:: python
 
-   fname = "../example_data/tif_cell_single_tif/13374.tif"
+   fname = "example_data/tif_cell_single_tif/13374.tif"
    image, metadata = om.imread(fname)
    print(f"Image shape: {image.shape}")
 
@@ -135,7 +135,7 @@ or OME-TIFF metadata.
 
 .. code-block:: python
 
-   fname_5d = "../example_data/tif_dummy_data/tif_single_files/TZCYX_T5_Z10_C2.tif"
+   fname_5d = "example_data/tif_dummy_data/tif_single_files/TZCYX_T5_Z10_C2.tif"
    image_5d, metadata_5d = om.imread(fname_5d)
    print(f"5D Image shape: {image_5d.shape} with axes {metadata_5d.get('axes', 'N/A')}")
    pprint.pprint(metadata_5d)
@@ -143,7 +143,7 @@ or OME-TIFF metadata.
 
 .. code-block:: python
 
-   fname_2d = "../example_data/tif_dummy_data/tif_single_files/YX.tif"
+   fname_2d = "example_data/tif_dummy_data/tif_single_files/YX.tif"
    image_2d, metadata_2d = om.imread(fname_2d)
    print(f"2D Image shape: {image_2d.shape} with axes {metadata_2d.get('axes', 'N/A')}")
    pprint.pprint(metadata_2d)
@@ -157,7 +157,7 @@ singleton axes (S) required for ImageJ compatibility:
 
 .. code-block:: python
 
-   fname_4d = "../example_data/tif_dummy_data/tif_with_ImageJ/TYXS_T1.tif"
+   fname_4d = "example_data/tif_dummy_data/tif_with_ImageJ/TYXS_T1.tif"
    image_4d, metadata_4d = om.imread(fname_4d)
    print(f"4D Image shape: {image_4d.shape} with axes {metadata_4d.get('axes', 'N/A')}")
    pprint.pprint(metadata_4d)
@@ -165,7 +165,7 @@ singleton axes (S) required for ImageJ compatibility:
 
 .. code-block:: python
 
-   fname_6d = "../example_data/tif_dummy_data/tif_with_ImageJ/TZCYXS_C1_Z10_T2.tif"
+   fname_6d = "example_data/tif_dummy_data/tif_with_ImageJ/TZCYXS_C1_Z10_T2.tif"
    image_6d, metadata_6d = om.imread(fname_6d)
    print(f"6D Image shape: {image_6d.shape} with axes {metadata_6d.get('axes', 'N/A')}")
    pprint.pprint(metadata_6d)
@@ -181,7 +181,7 @@ image to avoid any loss of information.
 
 .. code-block:: python
 
-   fname_6d = "../example_data/tif_dummy_data/tif_with_ImageJ/TZCYXS_T5_Z10_C2.tif"
+   fname_6d = "example_data/tif_dummy_data/tif_with_ImageJ/TZCYXS_T5_Z10_C2.tif"
    image_6d, metadata_6d = om.imread(fname_6d)
    print(f"6D Image shape: {image_6d.shape} with axes {metadata_6d.get('axes', 'N/A')}")
    pprint.pprint(metadata_6d)
@@ -191,7 +191,7 @@ Let's also open an OME-TIFF file:
 
 .. code-block:: python
 
-   fname_ometiff = "../example_data/tif_dummy_data/ome_tif/TZCYX_T5_Z10_C2.ome.tif"
+   fname_ometiff = "example_data/tif_dummy_data/ome_tif/TZCYX_T5_Z10_C2.ome.tif"
    image_ometiff, metadata_ometiff = om.imread(fname_ometiff)
    print(f"OME-TIFF Image shape: {image_ometiff.shape} with axes {metadata_ometiff.get('axes', 'N/A')}")
    pprint.pprint(metadata_ometiff)
@@ -206,7 +206,7 @@ metadata.
 
 .. code-block:: python
 
-   fname_2d = "../example_data/tif_dummy_data/tif_single_files/YX.tif"
+   fname_2d = "example_data/tif_dummy_data/tif_single_files/YX.tif"
    image_2d, metadata_2d = om.imread(fname_2d)
    print(f"2D Image shape: {image_2d.shape} with axes {metadata_2d.get('axes', 'N/A')}")
 
@@ -224,7 +224,7 @@ Let's inspect the written OME-TIFF file:
 
 .. code-block:: python
 
-   fname_2d_written = "../example_data/tif_dummy_data/tif_single_files/omio_converted/YX.ome.tif"
+   fname_2d_written = "example_data/tif_dummy_data/tif_single_files/omio_converted/YX.ome.tif"
    image_2d_written, metadata_2d_written = om.imread(fname_2d_written)
    print(f"Written 2D Image shape: {image_2d_written.shape} with axes {metadata_2d_written.get('axes', 'N/A')}")
    om.open_in_napari(image_2d_written, metadata_2d_written, fname_2d_written)
@@ -243,7 +243,7 @@ writing in a single step.
 
 .. code-block:: python
 
-   fname_5d = "../example_data/tif_dummy_data/tif_single_files/TZCYX_T5_Z10_C2.tif"
+   fname_5d = "example_data/tif_dummy_data/tif_single_files/TZCYX_T5_Z10_C2.tif"
    om.imconvert(fname_5d, relative_path="omio_converted")
 
 ``imconvert`` accepts all arguments of both ``imread`` and ``imwrite``, allowing full

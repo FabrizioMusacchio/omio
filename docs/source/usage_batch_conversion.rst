@@ -58,7 +58,7 @@ as minimum:
 
 .. code-block:: python
 
-   fname = "../example_data/tif_dummy_data/BIDS_project_example/"
+   fname = "example_data/tif_dummy_data/BIDS_project_example/"
    id_tag = "ID"
    exp_tag = "TP001"  # contains tif files
 
@@ -116,7 +116,7 @@ one level up as done before with `imconvert`.
        relative_path="omio_bids_converted")
 
    fname_converted = (
-       "../example_data/tif_dummy_data/BIDS_project_example/"
+       "example_data/tif_dummy_data/BIDS_project_example/"
        "ID0001/TP006_tif_multi_file_stack/"
        "omio_bids_converted/"
        "TZCYX_T5_Z10_C2_Z00_C0_T0.ome.tif")

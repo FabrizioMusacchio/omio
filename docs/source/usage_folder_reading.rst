@@ -19,7 +19,7 @@ of images and a list of metadata dictionaries, one for each read file.
 
 .. code-block:: python
 
-   fname_folder = "../example_data/tif_dummy_data/tif_folder_with_multiple_files/"
+   fname_folder = "example_data/tif_dummy_data/tif_folder_with_multiple_files/"
    images_folder, metadata_folder = om.imread(fname_folder)
 
    print(f"Number of images read from folder: {len(images_folder)}\n")
@@ -47,7 +47,7 @@ will be zero-padded to match the largest image shape along each axis before merg
 
 .. code-block:: python
 
-   fname_folder = "../example_data/tif_dummy_data/tif_folder_with_multiple_files_unequal_shapes/"
+   fname_folder = "example_data/tif_dummy_data/tif_folder_with_multiple_files_unequal_shapes/"
    images_merged, metadata_merged = om.imread(
        fname_folder,
        merge_multiple_files_in_folder=True,
@@ -106,7 +106,7 @@ in each of these folders.
 
 .. code-block:: python
 
-   fname_folder_stacks = "../example_data/tif_dummy_data/tif_folder_stacks/FOV1_time001"
+   fname_folder_stacks = "example_data/tif_dummy_data/tif_folder_stacks/FOV1_time001"
    images_folder_stacks, metadata_folder_stacks = om.imread(
        fname_folder_stacks,
        folder_stacks=True)

@@ -30,7 +30,7 @@ heuristic reconstruction of complex TIFF layouts.
 
 .. code-block:: python
 
-   fname_multi_series = "../example_data/tif_dummy_data/multiseries_tif/multiseries_rgb_with_equal_shapes.tif"
+   fname_multi_series = "example_data/tif_dummy_data/multiseries_tif/multiseries_rgb_with_equal_shapes.tif"
    image_multi_series, metadata_multi_series = om.imread(fname_multi_series)
    pprint.pprint(metadata_multi_series)
 
@@ -48,19 +48,19 @@ interpretations.
 
 .. code-block:: python
 
-   fname_multi_series = "../example_data/tif_dummy_data/multiseries_tif/multiseries_rgb_with_unequal_series.tif"
+   fname_multi_series = "example_data/tif_dummy_data/multiseries_tif/multiseries_rgb_with_unequal_series.tif"
    image_multi_series, metadata_multi_series = om.imread(fname_multi_series)
    pprint.pprint(metadata_multi_series)
 
-   fname_multi_series = "../example_data/tif_dummy_data/multiseries_tif/multiseries_rgb_minisblack_mixture.tif"
+   fname_multi_series = "example_data/tif_dummy_data/multiseries_tif/multiseries_rgb_minisblack_mixture.tif"
    image_multi_series, metadata_multi_series = om.imread(fname_multi_series)
    pprint.pprint(metadata_multi_series)
 
-   fname_multi_series = "../example_data/tif_dummy_data/multiseries_tif/multiseries_minisblack.tif"
+   fname_multi_series = "example_data/tif_dummy_data/multiseries_tif/multiseries_minisblack.tif"
    image_multi_series, metadata_multi_series = om.imread(fname_multi_series)
    pprint.pprint(metadata_multi_series)
 
-   fname_multi_series = "../example_data/tif_dummy_data/paginated_tif/paginated_TCYXS.ome.tif"
+   fname_multi_series = "example_data/tif_dummy_data/paginated_tif/paginated_TCYXS.ome.tif"
    image_multi_series, metadata_multi_series = om.imread(fname_multi_series)
    pprint.pprint(metadata_multi_series)
 
@@ -82,7 +82,7 @@ page may have different dimensionalities, axes, or metadata.
 
 .. code-block:: python
 
-   fname_paginated = "../example_data/tif_dummy_data/paginated_tif/paginated_tif.tif"
+   fname_paginated = "example_data/tif_dummy_data/paginated_tif/paginated_tif.tif"
    images, metadata_paginated = om.imread(fname_paginated)
 
    print(f"Number of pages read: {len(images)}")
@@ -116,7 +116,7 @@ array along with the associated OME-compliant metadata.
 
 .. code-block:: python
 
-   fname_multifile_ometiff = "../example_data/tif_dummy_data/tif_ome_multi_file_series/TZCYX_T5_Z10_C2_Z00_C0_T0.ome.tif"
+   fname_multifile_ometiff = "example_data/tif_dummy_data/tif_ome_multi_file_series/TZCYX_T5_Z10_C2_Z00_C0_T0.ome.tif"
    image_multifile_ometiff, metadata_multifile_ometiff = om.imread(fname_multifile_ometiff)
 
    print(f"Multi-file OME-TIFF image shape: {image_multifile_ometiff.shape}")

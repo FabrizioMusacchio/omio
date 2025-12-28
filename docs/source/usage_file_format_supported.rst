@@ -22,7 +22,7 @@ LSM files directly with ``imread`` as well.
 
 .. code-block:: python
 
-   fname_lsm = "../example_data/lsm_test_file/032113-18.lsm"
+   fname_lsm = "example_data/lsm_test_file/032113-18.lsm"
    image_lsm, metadata_lsm = om.imread(fname_lsm)
    print(f"LSM image shape: {image_lsm.shape}")
    pprint.pprint(metadata_lsm)
@@ -37,7 +37,7 @@ calls the ``read_czi`` function based on the ``czifile`` library.
 
 .. code-block:: python
 
-   fname_czi = "../example_data/czi_test_file/xt-scan-lsm980.czi"
+   fname_czi = "example_data/czi_test_file/xt-scan-lsm980.czi"
    image_czi, metadata_czi = om.imread(fname_czi)
    print(f"CZI image shape: {image_czi.shape}")
    pprint.pprint(metadata_czi)
@@ -56,7 +56,7 @@ Python 3.10 and above. Thus, OMIO provides its own implementation to read Thorla
 
 .. code-block:: python
 
-   fname_raw = "../example_data/thorlabs_dummy_data/case_C2_Z10_T5/example_C2_Z10_T5.raw"
+   fname_raw = "example_data/thorlabs_dummy_data/case_C2_Z10_T5/example_C2_Z10_T5.raw"
 
 This folder contains dummy Thorlabs RAW files generated with the script
 ``additional_scripts/generate_thorlabs_dummy_raws.py``. It also contains the associated
@@ -77,7 +77,7 @@ and returns ``None`` for both image and metadata.
 
 .. code-block:: python
 
-   fname_raw = "../example_data/thorlabs_dummy_data/case_C2_Z10_T5_missing_xml/example_C2_Z10_T5.raw"
+   fname_raw = "example_data/thorlabs_dummy_data/case_C2_Z10_T5_missing_xml/example_C2_Z10_T5.raw"
    image_raw, metadata_raw = om.imread(fname_raw)
 
 In such cases, you can provide a YAML file with the required metadata as a fallback. The YAML
@@ -107,7 +107,7 @@ you can then modify as needed.
 
 .. code-block:: python
 
-   fname_raw = "../example_data/thorlabs_dummy_data/case_C2_Z10_T5_yaml/example_C2_Z10_T5.raw"
+   fname_raw = "example_data/thorlabs_dummy_data/case_C2_Z10_T5_yaml/example_C2_Z10_T5.raw"
    om.create_thorlabs_raw_yaml(
        fname_raw,
        T=5,

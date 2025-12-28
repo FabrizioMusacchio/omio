@@ -60,7 +60,7 @@ You can now manipulate the created empty image as needed:
            for c in range(my_image.shape[2]):
                my_image[t, z, c, :, :] = t * 100 + z * 10 + c
 
-   pathname_save = "../example_data/custom_created_images/"
+   pathname_save = "example_data/custom_created_images/"
    os.makedirs(pathname_save, exist_ok=True)
 
    om.imwrite(

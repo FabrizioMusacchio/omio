@@ -24,7 +24,7 @@ To read a large TIFF file lazily, use the ``imread`` function with the
 
 .. code-block:: python
 
-   fname = "../example_data/tif_large_Ca_imaging_large/1MP_SIMPLE_Stephan__001_001.tif"
+   fname = "example_data/tif_large_Ca_imaging_large/1MP_SIMPLE_Stephan__001_001.tif"
    image_lazy, metadata_lazy = om.imread(fname, zarr_store="memory")
 
    print(f"Lazy image shape: {image_lazy.shape}")
@@ -85,7 +85,7 @@ The following example uses a 1.1 GB 3D image stack with multiple channels:
 
 .. code-block:: python
 
-   fname = "../example_data/tif_files_from_3P_paper/Supplementary_Video_4.tif"
+   fname = "example_data/tif_files_from_3P_paper/Supplementary_Video_4.tif"
 
 File name: Supplementary Video 4  
 Description: In-vivo 3P Cortex to Hippocampus z-scan of 265 x-y frames from surface
