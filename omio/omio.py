@@ -93,13 +93,6 @@ First version: December 21, 2025
 
 This module is part of the OMIO project and is developed in the context of
 scientific microscopy data processing workflows.
-
-TODO: THIS WILL BE REMOVED LATER!
-New Python version End 2025:
-conda create -n omio_scratch_dev -y python=3.12 mamba
-conda activate omio_scratch_dev
-mamba install -y ipython ipykernel numpy zarr numcodecs tqdm czifile tifffile napari pyqt pyside2 dask pyyaml
-
 """
 # %% IMPORTS
 import os, re
