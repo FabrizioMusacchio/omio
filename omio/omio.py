@@ -3778,8 +3778,8 @@ def create_empty_image(shape: tuple[int, int, int, int, int] = (1, 1, 1, 1, 1),
       chunk sizes may match the full dimensions.
     """
     if shape is None or len(shape) != 5:
-        warnings.warn("create_empty_image: shape must be a 5-tuple (T, Z, C, Y, X).\n"
-                      f"  Got: {shape!r}")
+        print("WARNING create_empty_image: shape must be a 5-tuple (T, Z, C, Y, X).\n"
+             f"        Got: {shape!r}. Will return None.")
         if return_metadata:
             return None, None
         else:
