@@ -54,6 +54,10 @@ OMIO Documentation
    :target: https://pepy.tech/projects/omio-microscopy
    :alt: PyPI Total Downloads
 
+.. image:: https://img.shields.io/badge/Example%20Datasets-10.5281%2Fzenodo.18078231-blue
+   :target: https://doi.org/10.5281/zenodo.18078231
+   :alt: Example Datasets on Zenodo
+
 .. image:: https://img.shields.io/badge/Zenodo%20Archive-10.5281%2Fzenodo.18030883-blue
    :target: https://doi.org/10.5281/zenodo.18030883
    :alt: Zenodo Archive
