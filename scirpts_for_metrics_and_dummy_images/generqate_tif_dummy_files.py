@@ -437,24 +437,11 @@ def main() -> None:
         tif.write(series1, photometric="minisblack")
     print(f"Wrote paginated rgb TIFF: {paged_rgb_path}")
     
-    # write a README.md into the output folder describing the content:
-    readme_path = os.path.join(OUT_DIR, "multiseries_tif/README.md")
-    with open(readme_path, "w") as f:
-        f.write("# Dummy paginated / multi-series TIFF files\n\n")
-        f.write("This folder contains dummy paginated / multi-series TIFF files generated for testing OMIO.\n\n")
-        f.write("The following files were generated:\n\n")
-        f.write(f"- `multiseries_tif/multiseries_rgb_with_equal_shapes.tif`: two RGB series with identical shapes (16,16,3)\n")
-        f.write(f"- `multiseries_tif/multiseries_rgb_with_unequal_series.tif`: two RGB series with differing shapes (16,16,3) and (17,17,3)\n")
-        f.write(f"- `multiseries_tif/multiseries_rgb_minisblack_mixture.tif`: one RGB series (16,16,3) and one minisblack series (2,32,32)\n")
-        f.write(f"- `multiseries_tif/multiseries_minisblack.tif`: two minisblack series (2,32,32) each\n")
-        f.write("\n")
-    
-    
     #data = np.random.randint(0, 255, (8, 2, base_resolution_Y, base_resolution_X, 3), 'uint16')
     data = _make_zeros_with_slice_labels((8, 2, base_resolution_Y, base_resolution_X, 3), "TCYXS", dtype=np.uint16)
     subresolutions = 2
     pixelsize = 0.29  # micrometer
-    paged_rgb_path = os.path.join(OUT_DIR, "paginated_tif/paginated_TCYXS.ome.tif")
+    paged_rgb_path = os.path.join(OUT_DIR, "multiseries_tif/multiseries_TCYXS.ome.tif")
     ensure_dir(os.path.dirname(paged_rgb_path))
     with tifffile.TiffWriter(paged_rgb_path, bigtiff=True) as tif:
         metadata = {
@@ -503,13 +490,35 @@ def main() -> None:
         tif.write(thumbnail, metadata={'Name': 'thumbnail'})
         
     # write a README.md into the output folder describing the content:
+    readme_path = os.path.join(OUT_DIR, "multiseries_tif/README.md")
+    with open(readme_path, "w") as f:
+        f.write("# Dummy paginated / multi-series TIFF files\n\n")
+        f.write("This folder contains dummy paginated / multi-series TIFF files generated for testing OMIO.\n\n")
+        f.write("The following files were generated:\n\n")
+        f.write(f"- `multiseries_tif/multiseries_rgb_with_equal_shapes.tif`: two RGB series with identical shapes (16,16,3)\n")
+        f.write(f"- `multiseries_tif/multiseries_rgb_with_unequal_series.tif`: two RGB series with differing shapes (16,16,3) and (17,17,3)\n")
+        f.write(f"- `multiseries_tif/multiseries_rgb_minisblack_mixture.tif`: one RGB series (16,16,3) and one minisblack series (2,32,32)\n")
+        f.write(f"- `multiseries_tif/multiseries_minisblack.tif`: two minisblack series (2,32,32) each\n")
+        f.write(f"- `multiseries_tif/multiseries_TCYXS.ome.tif`: shape=(8, 2, {base_resolution_Y}, {base_resolution_X}, 3), axes=TCYXS, with 2 sub-resolution levels and a thumbnail image.\n")
+        f.write("\n")
+    
+    # write a paginated TIFF with RGB series of differing shapes:
+    series0 = np.random.randint(0, 255, (16, 16, 3), dtype=np.uint8)
+    series1 = np.random.randint(0, 255, (17, 17, 3), dtype=np.uint8)
+    paged_rgb_path = os.path.join(OUT_DIR, "paginated_tif/paginated_tif.tif")
+    ensure_dir(os.path.dirname(paged_rgb_path))
+    with tifffile.TiffWriter(paged_rgb_path) as tif:
+        tif.write(series0, photometric="rgb", metadata={'axes': 'YXP'})
+        tif.write(series1, photometric="rgb", metadata={'axes': 'YXP'})
+    print(f"Wrote paginated OME-TIFF: {paged_rgb_path}")
     readme_path = os.path.join(OUT_DIR, "paginated_tif/README.md")
     with open(readme_path, "w") as f:
-        f.write("# Dummy paginated / multi-resolution OME-TIFF file\n\n")
-        f.write("This folder contains a dummy paginated / multi-resolution OME-TIFF file generated for testing OMIO.\n\n")
+        f.write("# Dummy paginated OME-TIFF file\n\n")
+        f.write("This folder contains a dummy paginated OME-TIFF file generated for testing OMIO.\n\n")
         f.write("The following file was generated:\n\n")
-        f.write(f"- `paginated_tif/paginated_TCYXS.ome.tif`: shape=(8, 2, {base_resolution_Y}, {base_resolution_X}, 3), axes=TCYXS, with 2 sub-resolution levels and a thumbnail image.\n")
+        f.write(f"- `paginated_tif/paginated_tif.ome.tif`: two RGB series with differing shapes (16,16,3) and (17,17,3)\n")
         f.write("\n")
+    
     
     # --------------------------------------------------------------------------------
     # test files for testing OMIO's batch capabilities:
