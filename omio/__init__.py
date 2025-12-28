@@ -2,7 +2,7 @@
 
 from .omio import (
     imread,
-    write_ometiff,
+    imwrite,
     imconvert,
     bids_batch_convert,
     cleanup_omio_cache,
@@ -20,7 +20,7 @@ from .omio import (
 
 __all__ = [
     "imread",
-    "write_ometiff",
+    "imwrite",
     "imconvert",
     "bids_batch_convert",
     "cleanup_omio_cache",

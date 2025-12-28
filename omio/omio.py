@@ -41,12 +41,12 @@ by internal helper utilities:
     NumPy or Zarr arrays together with validated OME-style metadata. Supports
     optional merging across files or folder stacks along a user-defined axis.
 
-* write_ometiff
+* imwrite
     OME-TIFF writer that enforces axis order, handles BigTIFF decisions, embeds
     physical scale metadata, and preserves provenance via OME MapAnnotations.
 
 * imconvert
-    End-to-end converter that combines imread and write_ometiff to transform
+    End-to-end converter that combines imread and imwrite to transform
     arbitrary supported input data into OME-TIFF with minimal boilerplate.
 
 * bids_batch_convert
@@ -4222,7 +4222,7 @@ def _get_original_filename_from_metadata(metadata: dict) -> Union[None, str]:
     return None
 
 # main OME-TIFF writer function:
-def write_ometiff(fname: str, 
+def imwrite(fname: str, 
                   images: Union[np.ndarray, "zarr.core.array.Array", list[Union[np.ndarray, "zarr.core.array.Array"]]], 
                   metadatas: Union[dict, list[dict]],
                   compression_level: int = 3, 
@@ -4327,7 +4327,7 @@ def write_ometiff(fname: str,
     if not isinstance(metadatas, list):
         metadatas = [metadatas]
     if len(images) != len(metadatas):
-        raise ValueError("write_ometiff: images and metadatas must have the same length.")
+        raise ValueError("imwrite: images and metadatas must have the same length.")
     
     # decide output parent directory:
     # * if fname is a directory: output next to that directory (or inside relative_path if set)
@@ -6984,7 +6984,7 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
 
     return images, metadatas
 
-# OMIO'S universal converter (=imreader + write_ometiff):
+# OMIO'S universal converter (=imreader + imwrite):
 def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
          zarr_store: Union[None, str] = None,
          recursive: bool = False,
@@ -7006,7 +7006,7 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     Convert microscopy image inputs to OME TIFF using OMIO's reader plus OME TIFF writer.
 
     This function is a convenience wrapper around `imread(...)` followed by
-    `write_ometiff(...)`. It accepts a single file path, a list of file paths, or a
+    `imwrite(...)`. It accepts a single file path, a list of file paths, or a
     folder path, reads the input data into OMIO's canonical representation (OME ordered
     axes TZCYX plus standardized metadata), and writes one OME TIFF per resulting image
     stack.
@@ -7058,7 +7058,7 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
 
     Output behavior
     ---------------
-    The output location and naming follow `write_ometiff(...)`:
+    The output location and naming follow `imwrite(...)`:
     
     * OME TIFFs are written next to the input file or inside the input folder.
     * If `relative_path` is provided, a subfolder is created under the chosen output
@@ -7106,7 +7106,7 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     pixelunit : str, optional
         Unit string forwarded to readers for unit normalization. Default is "micron".
     compression_level : int, optional
-        Zlib compression level passed to `write_ometiff(...)`. Default is 3.
+        Zlib compression level passed to `imwrite(...)`. Default is 3.
     relative_path : str or None, optional
         Optional relative subfolder under the output parent directory where OME TIFFs
         are written. Default is "omio_converted".
@@ -7160,7 +7160,7 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
             print("No images or metadata to write. Conversion aborted.")
         return None
     
-    fnames_written = write_ometiff(
+    fnames_written = imwrite(
             fname=fname,
             images=images,
             metadatas=metadatas,
@@ -7371,7 +7371,7 @@ def bids_batch_convert(
     Output placement and naming
     ---------------------------
     Output placement follows OMIO’s writer conventions via ``imconvert()`` and
-    ``write_ometiff()``:
+    ``imwrite()``:
 
     * If ``relative_path`` is not None, outputs are written into a subfolder named
       ``relative_path`` under the relevant experiment folder (or under the experiment
@@ -7658,7 +7658,7 @@ def bids_batch_convert(
 
                 # Write merged output at exp level (not inside a tagfolder).
                 # We call writer with fname=exp_path to place output in exp scope.
-                fnames_written = write_ometiff(
+                fnames_written = imwrite(
                     fname=exp_path,
                     images=merged_img,
                     metadatas=merged_md,

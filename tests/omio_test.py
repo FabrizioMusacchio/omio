@@ -20,7 +20,7 @@ from omio.omio import (
     create_empty_image,
     create_empty_metadata,
     update_metadata_from_image,
-    write_ometiff,
+    imwrite,
     imread,
     imconvert,
     bids_batch_convert,
@@ -3406,7 +3406,7 @@ def test_update_metadata_from_image_accepts_zarr_array():
     assert "k" not in md
     assert md["Annotations"]["k"] == "v"
 
-# %% WRITE_OMETIFF
+# %% IMWRITE
 
 def _make_image_and_metadata(shape=(1, 1, 1, 8, 9), *, annotations=None):
     img = np.zeros(shape, dtype=np.uint16)
@@ -3423,7 +3423,7 @@ def test_write_ometiff_single_writes_file_and_returns_fname(tmp_path):
     img, md = _make_image_and_metadata()
 
     anchor = tmp_path / "out.ome.tif"
-    fnames = write_ometiff(
+    fnames = imwrite(
         str(anchor),
         img,
         md,
@@ -3456,7 +3456,7 @@ def test_write_ometiff_writes_mapannotation_from_annotations_dict(tmp_path):
     img, md = _make_image_and_metadata(annotations={"Experiment": "MSD", "Namespace": "omio:metadata"})
 
     out = tmp_path / "ann.ome.tif"
-    write_ometiff(str(out), img, md, overwrite=True, verbose=False)
+    imwrite(str(out), img, md, overwrite=True, verbose=False)
 
     with tifffile.TiffFile(str(out)) as tif:
         ome = tif.ome_metadata
@@ -3470,7 +3470,7 @@ def test_write_ometiff_multiple_uses_original_filename_from_annotations(tmp_path
     img2, md2 = _make_image_and_metadata(annotations={"original_filename": "b.tif"})
 
     anchor = tmp_path / "fallback.ome.tif"
-    fnames = write_ometiff(
+    fnames = imwrite(
         str(anchor),
         [img1, img2],
         [md1, md2],
@@ -3487,7 +3487,7 @@ def test_write_ometiff_relative_path_writes_into_subfolder(tmp_path):
     img, md = _make_image_and_metadata()
 
     anchor = tmp_path / "rootname.ome.tif"
-    write_ometiff(
+    imwrite(
         str(anchor),
         img,
         md,
@@ -3502,7 +3502,7 @@ def test_write_ometiff_images_metadatas_length_mismatch_raises(tmp_path):
     img, md = _make_image_and_metadata()
 
     with pytest.raises(ValueError):
-        write_ometiff(
+        imwrite(
             str(tmp_path / "x.ome.tif"),
             [img, img],
             [md],
@@ -3682,7 +3682,7 @@ def _write_simple_ome_tif_5d(path: Path, shape=(2, 2, 2, 32, 32), dtype=np.uint1
 
     out = Path(fnames[0])
     assert out.exists()
-    # with fname=".../in.tif", write_ometiff writes ".../in.ome.tif"
+    # with fname=".../in.tif", imwrite writes ".../in.ome.tif"
     assert out.name == "in.ome.tif"
 
     with tifffile.TiffFile(str(out)) as tif:
@@ -4027,7 +4027,7 @@ Test data policy
   that expect 5D shaped data.
 * No real device specific formats (CZI, Thorlabs RAW) are used here, because those
   readers are tested separately and the batch converter only orchestrates traversal
-  plus calls into imread and write_ometiff.
+  plus calls into imread and imwrite.
 """
 
 def _build_bids_like_tree(
@@ -4409,12 +4409,12 @@ def test_bids_batch_convert_mode_b_merge_tagfolders_imread_none_skips(tmp_path, 
                          tagfolder_prefix="TAG_", tagfolders_per_exp=2)
 
     monkeypatch.setattr("omio.omio.imread", lambda **kwargs: (None, None))
-    # write_ometiff must not be called
+    # imwrite must not be called
     called = {"write": 0}
     def fake_write_ometiff(**kwargs):
         called["write"] += 1
         return ["x"]
-    monkeypatch.setattr("omio.omio.write_ometiff", fake_write_ometiff)
+    monkeypatch.setattr("omio.omio.imwrite", fake_write_ometiff)
 
     out = bids_batch_convert(
         fname=str(project),
@@ -4444,7 +4444,7 @@ def test_bids_batch_convert_mode_b_merge_tagfolders_injects_provenance_and_uses_
         captured["md"] = metadatas
         captured["relative_path"] = relative_path
         return [str(Path(fname) / (relative_path or "") / "out.ome.tif")]
-    monkeypatch.setattr("omio.omio.write_ometiff", fake_write_ometiff)
+    monkeypatch.setattr("omio.omio.imwrite", fake_write_ometiff)
 
     out = bids_batch_convert(
         fname=str(project),
@@ -4477,7 +4477,7 @@ def test_bids_batch_convert_mode_b_merge_tagfolders_overwrites_non_dict_annotati
     def fake_write_ometiff(**kwargs):
         captured["md"] = kwargs["metadatas"]
         return [str(Path(kwargs["fname"]) / "merged" / "out.ome.tif")]
-    monkeypatch.setattr("omio.omio.write_ometiff", fake_write_ometiff)
+    monkeypatch.setattr("omio.omio.imwrite", fake_write_ometiff)
 
     out = bids_batch_convert(
         fname=str(project),
@@ -4503,7 +4503,7 @@ def test_bids_batch_convert_merge_tagfolders_cleanup_called_only_when_zarr_store
     dummy_md = {}
 
     monkeypatch.setattr("omio.omio.imread", lambda **kwargs: (dummy_img, dummy_md))
-    monkeypatch.setattr("omio.omio.write_ometiff", lambda **kwargs: [str(tmp_path / "out.ome.tif")])
+    monkeypatch.setattr("omio.omio.imwrite", lambda **kwargs: [str(tmp_path / "out.ome.tif")])
 
     calls = {"n": 0}
     def fake_cleanup(path, full_cleanup=False, verbose=False):
