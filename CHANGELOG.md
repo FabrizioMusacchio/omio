@@ -2,12 +2,12 @@
 
 This release focuses on improving documentation and usability.
 
-### 📚 Citation and archiving
+### 📚 Citation and Archiving
 * OMIO releases are now linked to [Zenodo](https://zenodo.org/records/18030883), enabling long-term archiving and versioned software snapshots.
 * A Zenodo DOI ([10.5281/zenodo.18030883](https://zenodo.org/records/18030883)) is associated with the project, making OMIO formally citable in scientific publications.
 * Citation metadata has been added to the repository to document the preferred citation form.
 
-### 📖 Documentation updates
+### 📖 Documentation Updates
 * The README has been revised to correct and clarify several example usage snippets.
 * Example code now reflects the current public API and recommended usage patterns more accurately.
 
@@ -46,36 +46,36 @@ This is the first public release of **OMIO (Open Microscopy Image I/O)**, provid
 ### ✨ Highlights
 OMIO v0.1.1 establishes the core design principles of the project: a single, canonical in-memory representation for microscopy images and metadata, explicit handling of OME axes, and robust support for large datasets via Zarr.
 
-### 🧠 Core functionality
+### 🧠 Core Functionality
 * Unified image reading interface for common microscopy formats, including TIFF, OME-TIFF, LSM, CZI, and Thorlabs RAW.
 * Canonical internal image representation using the OME axis order **TZCYX**.
 * Automatic axis normalization, validation, and correction based on file metadata.
 * Consistent metadata handling aligned with OME concepts, including physical pixel sizes, time increments, and axis annotations.
 * Explicit provenance tracking of original filenames, file types, and metadata sources.
 
-### 🔬 Thorlabs RAW support
+### 🔬 Thorlabs RAW Support
 * Native reading of Thorlabs RAW files using accompanying XML metadata.
 * YAML metadata fallback when XML metadata is unavailable, enabling reproducible interpretation of legacy or incomplete datasets.
 * Automatic correction of Z dimension inconsistencies based on RAW file size.
 * Optional memory-efficient Zarr output for large RAW datasets, with slice-wise copying to limit peak RAM usage.
 
-### 📦 Zarr integration
+### 📦 Zarr Integration
 * Optional output as NumPy arrays or Zarr arrays (in-memory or on-disk).
 * Automatic chunk size computation based on image shape and axis order.
 * Incremental writing strategies to support large files and interactive environments.
 
-### 👁️ Napari integration
+### 👁️ Napari Integration
 * Built-in Napari viewer utilities for interactive inspection of OMIO-loaded images.
 * Automatic handling of OME axes and dimensionality for Napari display.
 * Support for efficient visualization of large Zarr-backed datasets without full materialization in memory.
 
-### 🔗 Merging and utilities
+### 🔗 Merging and Utilities
 * Concatenation of compatible 5D image stacks along selected OME axes.
 * Optional zero-padding to merge datasets with mismatched non-merge dimensions.
 * Robust handling of filename collisions and metadata provenance during merge operations.
 * Helper utilities for Zarr group inspection, metadata recovery, and axis consistency checks.
 
-### 🧪 Testing and robustness
+### 🧪 Testing and Robustness
 * Extensive automated test coverage across readers, edge cases, and failure modes.
 * Synthetic test data for RAW and TIFF paths, complemented by small CC BY 4.0 test images for CZI and LSM formats.
 * Clear warning and error behavior for incomplete metadata, unsupported configurations, and inconsistent inputs.
@@ -85,7 +85,7 @@ OMIO v0.1.1 establishes the core design principles of the project: a single, can
 * Importable Python package name remains **omio**.
 * Python 3.12 or newer required.
 
-### 🔭 Scope and outlook
+### 🔭 Scope and Outlook
 This release focuses on correctness, transparency, and reproducibility rather than maximal format coverage. OMIO is designed as a stable foundation for downstream analysis pipelines, where consistent axis semantics and metadata integrity are critical.
 
 Future releases will expand format support, refine metadata policies, and further improve performance and interoperability with downstream bioimaging tools.
