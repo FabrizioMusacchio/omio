@@ -9,8 +9,8 @@ OMIO is designed as an infrastructure layer between heterogeneous microscopy fil
 
 **NOTE 1:** OMIO is **currently under active development**. The API and feature set may change in future releases.
 
-**NOTE 2:** A rudimentary **documentation website** is available at: 
-<https://omio.readthedocs.io>. We will add more usage examples and guides over time.
+A comprehensive **documentation website** is available at: 
+<https://omio.readthedocs.io>. 
 
 
 ## What is OMIO good for your microscopy data?
