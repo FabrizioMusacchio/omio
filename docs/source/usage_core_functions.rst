@@ -14,6 +14,7 @@ was successful:
 .. code-block:: python
 
    import omio as om
+   import pprint
    om.hello_world()
 
 The command above should print something like:
@@ -56,7 +57,6 @@ Let's inspect some of the read metadata:
 
 .. code-block:: python
 
-   import pprint
    print(f"Metadata keys: {list(metadata.keys())}")
    pprint.pprint(metadata)
 
