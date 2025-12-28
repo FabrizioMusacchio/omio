@@ -42,27 +42,27 @@ Design principles
 -----------------
 
 Explicit axis semantics
-^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 All image data handled by OMIO carry an explicit axis string, with the default
 internal convention being ``TZCYX``. Axis order is never implicit and never guessed
 silently.
 
 OME aware, but not OME exclusive
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 OME semantics serve as the internal reference model for OMIO, but the library is
 not restricted to OME TIFF input or output. OME TIFF is treated as one well defined
 sink among several possible representations.
 
 Policy driven behavior
-^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Operations such as merging, padding, and metadata reconciliation are governed by
 explicit and documented policies rather than hidden heuristics.
 
 Memory aware by construction
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Large datasets can be processed via Zarr and Dask without loading entire volumes
 into memory. Chunk aligned copying, cache based workflows, and memory mapped
@@ -70,7 +70,7 @@ access are first class concepts and allow both out of core processing and
 interactive visualization in napari.
 
 Separation of concerns
-^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Reading, merging, visualization, and writing are treated as distinct stages that
 can be composed flexibly but are not entangled.
@@ -80,7 +80,7 @@ Core functionality
 ------------------
 
 Unified image reading
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 OMIO provides a single entry point for reading microscopy image data from files or
 folders. Supported formats include common TIFF based formats, Zeiss LSM and CZI,
@@ -93,7 +93,7 @@ All readers return:
 * an explicit axis specification
 
 Metadata normalization and enforcement
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Metadata are normalized into a structured dictionary that includes axis
 information, full five dimensional shape, physical pixel sizes, temporal
@@ -102,7 +102,7 @@ resolution, units, and structured provenance stored via OME MapAnnotations.
 Non OME metadata are preserved and stored explicitly rather than discarded.
 
 Controlled merging along semantic axes
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 OMIO supports concatenation and merging along semantic axes such as time, depth,
 and channel. Merge behavior is configurable and can enforce strict compatibility
@@ -110,7 +110,7 @@ or allow zero padding of non merge axes to maximal extents. All merges propagate
 provenance information into metadata annotations.
 
 Folder based and BIDS like workflows
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 OMIO supports structured folder traversal for large projects, including reading
 all files in a folder, merging multiple files within a folder, merging structured
@@ -118,14 +118,14 @@ folder stacks, and batch processing of BIDS like directory hierarchies. These
 workflows reflect how microscopy data are commonly organized in practice.
 
 OME TIFF export
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 
 OMIO can write OME TIFF files with correct axis order, physical and temporal
 metadata, optional BigTIFF handling for large datasets, and embedded
 MapAnnotations for provenance and custom metadata.
 
 Napari integration
-^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 OMIO integrates directly with napari, supporting NumPy based visualization for
 small data, Zarr backed visualization for large data, and correct spatial scaling
@@ -133,7 +133,7 @@ and channel handling. Axis squeezing and cache generation are performed explicit
 and transparently.
 
 Creating metadata and image templates
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 OMIO provides utility functions to create empty metadata and image templates
 that can be populated programmatically or used as blueprints for new datasets.
@@ -146,6 +146,7 @@ OMIO exposes a small set of core functions that cover most workflows:
 
 * ``imread()`` for reading images from files or folders
 * ``imconvert()`` for converting images to OME TIFF
+* ``imwrite()`` for writing images to OME TIFF
 * ``bids_batch_convert()`` for batch conversion of BIDS like projects
 * ``open_in_napari()`` for interactive visualization
 * utility functions for metadata and image template handling
@@ -168,45 +169,8 @@ which such pipelines can be built.
 Installation
 ------------
 
-OMIO targets Python 3.12 and higher and builds on the standard scientific Python stack
-commonly used in microscopy and large scale image processing workflows. Core
-dependencies include NumPy, tifffile, zarr, dask, napari, and related libraries
-for metadata handling and image I/O.
-
-The recommended way to install OMIO for end users is via the Python Package Index
-(PyPI):
-
-.. code-block:: bash
-
-   conda create -n omio python=3.12 -y
-   conda activate omio
-   pip install omio-microscopy
-
-For development work or reproducible analysis pipelines, it is often convenient
-to install OMIO from source:
-
-.. code-block:: bash
-
-   git clone https://github.com/FabrizioMusacchio/OMIO.git
-   cd OMIO
-   pip install .
-
-Alternatively, OMIO can be installed directly from GitHub without cloning the
-repository:
-
-.. code-block:: bash
-
-   pip install git+https://github.com/FabrizioMusacchio/OMIO.git
-
-If you plan to modify the code, use an editable installation:
-
-.. code-block:: bash
-
-   pip install -e .
-
-Avoid mixing local source folders and installed packages with the same name in
-the same working directory, as this can lead to confusing import behavior and
-unexpected imports during development.
+Please refer to the `installation instructions <installation>`_ for details on how to
+install OMIO and its dependencies.
 
 
 Further reading

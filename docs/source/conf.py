@@ -47,6 +47,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.viewcode",
     "sphinx_autodoc_typehints",
+    "myst_parser",
 ]
 autosummary_generate = True
 napoleon_google_docstring = False

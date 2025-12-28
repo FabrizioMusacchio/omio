@@ -12,7 +12,7 @@ OMIO's main high-level API functions for reading, writing, and converting
 microscopy image data:
 
 .. autofunction:: imread
-.. autofunction:: write_ometiff
+.. autofunction:: imwrite
 .. autofunction:: imconvert
 .. autofunction:: bids_batch_convert
 

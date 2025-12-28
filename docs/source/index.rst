@@ -1,12 +1,7 @@
-.. omio documentation master file, created by
-   sphinx-quickstart on Tue Dec 23 22:22:00 2025.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 OMIO Documentation
 ==================
 
-`OMIO <https://github.com/FabrizioMusacchio/omio>`_ (Open Microscopy Image I/O) is a policy-driven Python library 
+`OMIO (Open Microscopy Image I/O) <https://github.com/FabrizioMusacchio/omio>`_ is a policy-driven Python library 
 for reading, organizing, merging, visualizing, and exporting multidimensional 
 microscopy image data under explicit OME-compliant axis and metadata semantics.
 
@@ -28,15 +23,16 @@ This documentation provides:
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
    overview
-   general_usage
-   real_world_workflows
+   installation
+   usage
    api
+   changelog
    contributing
 
-MotilA is `free and open-source software (FOSS) <https://en.wikipedia.org/wiki/Free_and_open-source_software>`_ 
+`OMIO <https://github.com/FabrizioMusacchio/omio>`_ is `free and open-source software (FOSS) <https://en.wikipedia.org/wiki/Free_and_open-source_software>`_ 
 distributed under the :ref:`GPL-3.0 license <license>`.
 
