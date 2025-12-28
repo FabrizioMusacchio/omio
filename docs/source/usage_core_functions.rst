@@ -8,17 +8,20 @@ and writing OME-TIFF output files.
 Hello World
 -----------
 
-OMIO has a simple hello world function to verify that the installation was successful.
-The following command should print something like:
-
-``Hello from omio.py! OMIO version: 0.1.0``
-
-(note that the version number may vary depending on the installed version).
+OMIO has a simple ``hello_world()`` function to verify that the installation 
+was successful:
 
 .. code-block:: python
 
    import omio as om
    om.hello_world()
+
+The command above should print something like:
+
+``Hello from omio.py! OMIO version: 0.1.0``
+
+If you see this message, OMIO is correctly installed and ready to use. 
+Note that the version number may vary depending on the installed version.
 
 
 Single File Reading and Metadata Inspection
