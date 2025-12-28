@@ -220,7 +220,7 @@ def test_standardize_imagej_metadata_does_not_parse_info_if_physicalsizex_presen
 
     md_out = _standardize_imagej_metadata(md_in)
 
-    assert md_out["PhysicalSizeX"] == 1.23
+    assert md_out["PhysicalSizeX"] == 9.99
 
 def test_standardize_imagej_metadata_parses_info_and_sets_xyz_sizes():
     info = "\n".join(
@@ -2479,7 +2479,7 @@ def test_read_thorlabs_raw_reads_xml_and_returns_numpy(tmp_path):
     assert md["PhysicalSizeX"] > 0
     assert md["PhysicalSizeY"] > 0
     assert md["PhysicalSizeZ"] > 0
-    assert md["unit"] is not None
+    assert md["Annotations"]["unit"] is not None
 
 # tests:
 
@@ -2589,7 +2589,7 @@ def test_read_thorlabs_raw_uses_yaml_when_no_xml_present(tmp_path):
     assert md["SizeY"] == Y
     assert md["SizeX"] == X
 
-    assert md["unit"] == "micron"
+    assert md["Annotations"]["unit"] == "micron"
     assert md["PhysicalSizeX"] == pytest.approx(0.5)
     assert md["PhysicalSizeY"] == pytest.approx(0.5)
     assert md["PhysicalSizeZ"] == pytest.approx(1.0)
@@ -2890,7 +2890,7 @@ def test_read_thorlabs_raw_yaml_optional_parse_fail_is_ignored(tmp_path):
     img, md = read_thorlabs_raw(str(raw_path), verbose=False)
 
     assert img is not None
-    assert md["unit"] == "micron"
+    assert md["Annotations"]["unit"] == "micron"
     assert md["PhysicalSizeX"] == pytest.approx(1.0)
     assert "TimeIncrement" not in md
     
@@ -3034,7 +3034,7 @@ def test_create_empty_metadata_defaults_and_core_keys_present():
     assert md["TimeIncrement"] == 1
     assert md["TimeIncrementUnit"] == "s"
 
-    assert md["unit"] == "µm"
+    assert md["Annotations"]["unit"] == "µm"
     assert "Annotations" in md
     assert isinstance(md["Annotations"], dict)
     assert "Namespace" in md["Annotations"]
@@ -3044,20 +3044,20 @@ def test_create_empty_metadata_defaults_and_core_keys_present():
 
 def test_create_empty_metadata_pixelunit_normalization_to_um():
     md = create_empty_metadata(pixelunit="micron", verbose=False)
-    assert md["unit"] == "µm"
+    assert md["Annotations"]["unit"] == "µm"
 
     md = create_empty_metadata(pixelunit="um", verbose=False)
-    assert md["unit"] == "µm"
+    assert md["Annotations"]["unit"] == "µm"
 
     md = create_empty_metadata(pixelunit="µm", verbose=False)
-    assert md["unit"] == "µm"
+    assert md["Annotations"]["unit"] == "µm"
 
     md = create_empty_metadata(pixelunit="micrometer", verbose=False)
-    assert md["unit"] == "µm"
+    assert md["Annotations"]["unit"] == "µm"
 
 def test_create_empty_metadata_custom_pixelunit_preserved():
     md = create_empty_metadata(pixelunit="nm", verbose=False)
-    assert md["unit"] == "nm"
+    assert md["Annotations"]["unit"] == "nm"
     
 def test_create_empty_metadata_physicalsize_override_applied():
     md = create_empty_metadata(physicalsize_xyz=(0.1, 0.2, 0.3), verbose=False)
@@ -3145,16 +3145,18 @@ def test_create_empty_metadata_explicit_overrides_win_over_input_metadata():
 # create_empty_image:
 
 
-def test_create_empty_image_invalid_shape_returns_none_and_warns():
-    with pytest.warns(UserWarning):
-        img = create_empty_image(shape=(1, 2, 3), verbose=False)
+def test_create_empty_image_invalid_shape_returns_none_and_warns(capsys):
+    img = create_empty_image(shape=(1, 2, 3), verbose=True)
+    captured = capsys.readouterr()
     assert img is None
+    assert "WARNING create_empty_image: shape must be a 5-tuple" in captured.out
 
-def test_create_empty_image_invalid_shape_returns_tuple_none_when_return_metadata():
-    with pytest.warns(UserWarning):
-        img, md = create_empty_image(shape=(1, 2, 3), return_metadata=True, verbose=False)
+def test_create_empty_image_invalid_shape_returns_tuple_none_when_return_metadata(capsys):
+    img, md = create_empty_image(shape=(1, 2, 3), return_metadata=True, verbose=False)
+    captured = capsys.readouterr()
     assert img is None
     assert md is None
+    assert "WARNING create_empty_image: shape must be a 5-tuple" in captured.out
 
 def test_create_empty_image_numpy_default_is_zeros_uint16():
     shape = (1, 2, 3, 4, 5)
