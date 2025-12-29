@@ -9,11 +9,84 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 --- 
 
+## 🚀 OMIO v0.2.0
+
+This release introduces a more consistent public API, improves TIFF and OME-TIFF handling (including multi-file OME-TIFF series and paginated stacks), strengthens napari visualization robustness, and significantly expands documentation and example data.
+
+### 📃 Summary of Changes
+#### ✨ Highlights
+
+* API consolidation: `write_ometiff` has been renamed to `imwrite` to align with `imread` and `imconvert`.
+* Improved TIFF family robustness: better physical pixel size handling, clearer container policies, and correct behavior for multi-file OME-TIFF series.
+* More robust napari visualization: clearer viewer summaries and safeguards against accidental loss of spatial axes.
+* Major documentation expansion and a Zenodo-hosted example dataset for tutorials and testing.
+
+#### ⚠️ Breaking changes
+* `write_ometiff` → `imwrite`
+  * Rationale: improves naming consistency across the core API (compared to `imread` and `imconvert`).
+  * Migration: replace `write_ometiff(...)` with `imwrite(...)`.
+
+
+#### 🧬 TIFF and LSM reading improvements
+* `read_tif` now emits explicit warnings when `PhysicalSizeX`, `PhysicalSizeY`, or `PhysicalSizeZ` cannot be read from metadata and default or user-provided values are used instead.
+* Improved fallback extraction of physical pixel sizes from TIFF tags when `imagej_metadata` is incomplete.
+  * `_standardize_imagej_metadata` has been extended accordingly.
+* Metadata inspection logic refined.
+  * `shaped_metadata` is now ignored in "not yet implemented metadata types" checks, as it typically contains only shape information.
+* README and `read_tif` docstrings now explicitly document support for multi-file OME-TIFF series.
+  * Passing the path of a single file is sufficient, as OMIO reconstructs the full logical dataset via OME-XML references.
+
+#### 📁 Folder reading and OME-TIFF series detection
+* `imread` now correctly detects multi-file OME-TIFF series when a folder path is provided.
+  * Previous behavior could incorrectly treat all TIFF files in a folder as independent images. This is now fixed.
+* The same fix propagates to `imconvert` and `bids_batch_convert`.
+
+
+#### 🆕 New utility function
+* Added `create_thorlabs_raw_yaml`.
+  * Allows users to generate an empty `experiment.yaml` template for Thorlabs RAW folders when `Experiment.xml` is missing.
+
+#### 👁️ Napari visualization updates
+* Improved the final status message of the napari opener.
+  * Now prints a concise summary including layer names, scales, and shapes.
+* Added internal safety checks to prevent spatial axes `X` and `Y` from being squeezed away when their dimension equals 1.
+
+#### 🛠️ Utilities and tests
+* `test_all_readers_with_dummy_data.py` now generates more informative dummy data.
+  * Dummy TIFF files include text annotations.
+  * Additional folder structures are created to demonstrate batch processing and folder handling behavior.
+
+#### 📚 Documentation
+Expanded and reorganized documentation, including:
+
+* A Core Workflow guide covering reading, inspecting, viewing, and writing images, with examples for `imread`, `imwrite`, and `imconvert`.
+* A detailed overview of supported formats (LSM, CZI, Thorlabs RAW) with usage examples.
+* Clarified TIFF container policies:
+  * multi-series TIFF stacks
+  * paginated TIFF stacks
+  * multi-file OME-TIFF series
+* Documentation of folder reading semantics in `imread`, including tagged folders and folder stacks.
+* Guidance on large file handling using Zarr-backed lazy loading and memory mapping, including Dask-based napari visualization.
+* A section on creating empty images and metadata with utilities for OME-compliant structures.
+* A new section on batch conversion over a BIDS-like tree using `bids_batch_convert`.
+
+
+#### 🧪 Example dataset
+* Added a Zenodo-hosted example dataset containing artificially generated toy data and selected publicly available real-world microscopy data for tutorials and testing.
+  * DOI: [10.5281/zenodo.18078231](https://doi.org/10.5281/zenodo.18078231)
+
+#### 📝 Notes for maintainers
+* Verify that all documentation and examples consistently use `imwrite`.
+* Ensure that references to `write_ometiff` are removed or updated.
+* Highlight the API rename prominently in upgrade notes and downstream documentation.
+
+--- 
+
 ## 🚀 OMIO v0.1.4
 
 This release focuses on improving documentation and usability.
 
-### Summary of Changes
+### 📃 Summary of Changes
 #### 📚 Citation and Archiving
 * OMIO releases are now linked to [Zenodo](https://zenodo.org/records/18030883), enabling long-term archiving and versioned software snapshots.
 * A Zenodo DOI ([10.5281/zenodo.18030883](https://zenodo.org/records/18030883)) is associated with the project, making OMIO formally citable in scientific publications.
@@ -38,7 +111,7 @@ is just a dummy release for connecting the repository to Zenodo.
 
 This release is a small maintenance update.
 
-### Summary of Changes
+### 📃 Summary of Changes
 #### 🧩 Fixed
 * Correctly resolve the installed package version at runtime when OMIO is distributed under the PyPI name **omio-microscopy** while being imported as `omio`.
 * Ensure the reported OMIO version now matches the version defined in `pyproject.toml`.
@@ -56,7 +129,7 @@ This release prepares OMIO for stable use via `pip install omio-microscopy` whil
 
 This is the first public release of **OMIO (Open Microscopy Image I/O)**, providing a unified, reproducible, and OME-compliant image loading layer for bioimaging and microscopy data.
 
-### Summary of Changes
+### 📃 Summary of Changes
 #### ✨ Highlights
 OMIO v0.1.1 establishes the core design principles of the project: a single, canonical in-memory representation for microscopy images and metadata, explicit handling of OME axes, and robust support for large datasets via Zarr.
 
