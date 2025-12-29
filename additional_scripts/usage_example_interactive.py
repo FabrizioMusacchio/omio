@@ -103,7 +103,6 @@ dictionary to be fully OME-compliant by moving any non-OME entries under the `"A
 metadata = om.OME_metadata_checkup(metadata)
 pprint.pprint(metadata)
 
-
 # %% OPEN IN NAPARI AND METADATA MODIFICATION
 """ 
 OMIO comes with built-in support to open images directly in Napari for interactive. Let's
@@ -232,6 +231,7 @@ Let's inspect the written OME-TIFF file:
 fname_2d_written = "../example_data/tif_dummy_data/tif_single_files/omio_converted/YX.ome.tif"
 image_2d_written, metadata_2d_written = om.imread(fname_2d_written)
 print(f"Written 2D Image shape: {image_2d_written.shape} with axes {metadata_2d_written.get('axes', 'N/A')}")
+pprint.pprint(metadata_2d_written)
 om.open_in_napari(image_2d_written, metadata_2d_written, fname_2d_written)
 
 """ 
@@ -398,7 +398,7 @@ image_multi_series, metadata_multi_series = om.imread(fname_multi_series)
 pprint.pprint(metadata_multi_series)
 
 
-fname_multi_series = "../example_data/tif_dummy_data/paginated_tif/paginated_TCYXS.ome.tif"
+fname_multi_series = "../example_data/tif_dummy_data/multiseries_tif/multiseries_TCYXS.ome.tif"
 image_multi_series, metadata_multi_series = om.imread(fname_multi_series)
 pprint.pprint(metadata_multi_series)
 
@@ -418,7 +418,9 @@ dimensionalities, axes, or metadata:
 
 fname_paginated = "../example_data/tif_dummy_data/paginated_tif/paginated_tif.tif"
 images, metadata_paginated = om.imread(fname_paginated)
+
 print(f"Number of pages read: {len(images)}")
+
 for i, (img, meta) in enumerate(zip(images, metadata_paginated)):
     print(f"Page {i}: shape={img.shape}, axes={meta.get('axes', 'N/A')}")
 
@@ -470,6 +472,8 @@ fname = "../example_data/tif_large_Ca_imaging_large/1MP_SIMPLE_Stephan__001_001.
 image_lazy, metadata_lazy = om.imread(fname, zarr_store="memory")
 print(f"Lazy image shape: {image_lazy.shape}")
 print(f"Lazy image type: {type(image_lazy)}")
+image_lazy
+
 # You can now manipulate `image_lazy` as a Zarr array without loading the entire dataset into memory.
 # For example, you can read a small chunk of the data:
 sub_stack = image_lazy[0, 0:10, 0:100, 0:100]
@@ -485,6 +489,7 @@ data:
 image_lazy_memmap, metadata_lazy_memmap = om.imread(fname, zarr_store="disk")
 print(f"Lazy memmap image shape: {image_lazy_memmap.shape}")
 print(f"Lazy memmap image type: {type(image_lazy_memmap)}")
+image_lazy_memmap
 
 om.open_in_napari(image_lazy_memmap, metadata_lazy_memmap, fname)
 
@@ -665,8 +670,8 @@ images_folder_stacks_merged, metadata_folder_stacks_merged = om.imread(fname_fol
                                                                    folder_stacks=True,
                                                                    merge_folder_stacks=True,
                                                                    merge_along_axis="T")
-print(f"Merged image shape from folder stacks: {images_folder_stacks_merged.shape}" 
-       "with axes {metadata_folder_stacks_merged.get('axes', 'N/A')}")
+print(f"Merged image shape from folder stacks: {images_folder_stacks_merged.shape} " 
+       f"with axes {metadata_folder_stacks_merged.get('axes', 'N/A')}")
 
 """ 
 `imconvert` also supports reading and merging of tagged folder stacks by providing. It
@@ -774,6 +779,7 @@ fname_converted = "../example_data/tif_dummy_data/BIDS_project_example/ID0001/TP
 image, metadata = om.imread(fname_converted)
 print(f"Multi-file OME-TIFF image shape: {image.shape} with axes {metadata.get('axes', 'N/A')}")
 om.open_in_napari(image, metadata, fname_converted)
+
 # %% CREATING EMPTY, OME-COMPLIANT IMAGE ARRAYS AND METADATA
 """
 OMIO provides a utility functions called `create_empty_image`, `create_empty_metadata`, and
