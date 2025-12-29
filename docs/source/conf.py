@@ -48,6 +48,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx_autodoc_typehints",
     "myst_parser",
+    "sphinx_copybutton",
 ]
 autosummary_generate = True
 napoleon_google_docstring = False
@@ -68,6 +69,9 @@ mathjax3_config = {
         "displayMath": [["$$", "$$"], ["\\[", "\\]"]],
     }
 }
+
+# allow copy button only for Python highlights:
+copybutton_selector = "div.highlight-python pre"
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

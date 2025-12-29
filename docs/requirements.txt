@@ -3,3 +3,4 @@ sphinx>=8,<10
 sphinx-rtd-theme>=3.0.0
 sphinx-autodoc-typehints>=2.0.0
 myst-parser
+sphinx-copybutton
