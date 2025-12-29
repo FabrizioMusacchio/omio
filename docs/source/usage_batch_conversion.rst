@@ -11,12 +11,11 @@ The examples below assume the following imports:
 OMIO’s Batch Conversion Function
 -----------------------------------
 
-OMIO provides a convenience function called `bids_batch_convert` to convert entire
+OMIO provides a convenience function called ``bids_batch_convert`` to convert entire
 folders of image files into OME-TIFF format in a single function call. It is required
 that the folder structures follow the BIDS-like naming conventions, where sub-folders
-are named according to specific tags such as `sub-<subject_id>`, `ses-<session_id>`,
-`acq-<acquisition_id>`, `run-<run_id>`, etc.
-
+are named according to specific tags such as ``sub-<subject_id>``, ``ses-<session_id>``,
+``acq-<acquisition_id>``, ``run-<run_id>``, etc.
 Here is a general example of a BIDS-like folder structure::
 
    project_root (= fname)
@@ -52,8 +51,8 @@ Where:
   tagfolders are processed.
 
 To perform a batch conversion of all image files in a BIDS-like folder structure,
-provide the root folder path as `fname` argument, the subject folder tag as `sub`
-argument, and the experiment folder tag as `exp` argument to `bids_batch_convert`
+provide the root folder path as ``fname`` argument, the subject folder tag as ``sub``
+argument, and the experiment folder tag as ``exp`` argument to ``bids_batch_convert``
 as minimum:
 
 .. code-block:: python
@@ -68,8 +67,8 @@ as minimum:
        exp=exp_tag,
        relative_path="omio_bids_converted")
 
-Of course, `bids_batch_convert` has the same functionalities as `imconvert`, `imread`,
-and `imwrite`, so that it is able to, for example, handle Thorlabs RAW files:
+Of course, ``bids_batch_convert`` has the same functionalities as ``imconvert``, ``imread``,
+and ``imwrite``, so that it is able to, for example, handle Thorlabs RAW files:
 
 .. code-block:: python
 
@@ -82,8 +81,8 @@ and `imwrite`, so that it is able to, for example, handle Thorlabs RAW files:
        relative_path="omio_bids_converted")
 
 Also tagged folder stacks can be processed, while the arguments to be provided differ
-slightly from those of `imread` and `imconvert`. Here, you have to provide the
-`tagfolder` argument to indicate the tag prefix of the tagfolders to be processed:
+slightly from those of ``imread`` and ``imconvert``. Here, you have to provide the
+``tagfolder`` argument to indicate the tag prefix of the tagfolders to be processed:
 
 .. code-block:: python
 
@@ -99,11 +98,11 @@ slightly from those of `imread` and `imconvert`. Here, you have to provide the
        merge_along_axis="T",
        relative_path="omio_bids_converted_FOV1")
 
-Note: Since `bids_batch_convert` processes multiple files and folders in a batch and
-additionally provides the `tagfolder`, it is not necessary to set the `relative_path`
-one level up as done before with `imconvert`.
+Note: Since ``bids_batch_convert`` processes multiple files and folders in a batch and
+additionally provides the ``tagfolder``, it is not necessary to set the ``relative_path``
+one level up as done before with ``imconvert``.
 
-`bids_batch_convert` can also handle multi-file OME-TIFF series correctly:
+``bids_batch_convert`` can also handle multi-file OME-TIFF series correctly:
 
 .. code-block:: python
 
@@ -126,3 +125,8 @@ one level up as done before with `imconvert`.
          f"with axes {metadata.get('axes', 'N/A')}")
 
    om.open_in_napari(image, metadata, fname_converted)
+
+.. code-block:: text
+
+   >>>
+   Multi-file OME-TIFF image shape: (5, 10, 2, 20, 100) with axes TZCYX
