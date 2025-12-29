@@ -13,7 +13,7 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 This release introduces a more consistent public API, improves TIFF and OME-TIFF handling (including multi-file OME-TIFF series and paginated stacks), strengthens napari visualization robustness, and significantly expands documentation and example data.
 
-### 📃 Summary of Changes
+### 📃 Changes
 #### ✨ Highlights
 
 * API consolidation: `write_ometiff` has been renamed to `imwrite` to align with `imread` and `imconvert`.
@@ -86,7 +86,7 @@ Expanded and reorganized documentation, including:
 
 This release focuses on improving documentation and usability.
 
-### 📃 Summary of Changes
+### 📃 Changes
 #### 📚 Citation and Archiving
 * OMIO releases are now linked to [Zenodo](https://zenodo.org/records/18030883), enabling long-term archiving and versioned software snapshots.
 * A Zenodo DOI ([10.5281/zenodo.18030883](https://zenodo.org/records/18030883)) is associated with the project, making OMIO formally citable in scientific publications.
@@ -111,7 +111,7 @@ is just a dummy release for connecting the repository to Zenodo.
 
 This release is a small maintenance update.
 
-### 📃 Summary of Changes
+### 📃 Changes
 #### 🧩 Fixed
 * Correctly resolve the installed package version at runtime when OMIO is distributed under the PyPI name **omio-microscopy** while being imported as `omio`.
 * Ensure the reported OMIO version now matches the version defined in `pyproject.toml`.
@@ -129,7 +129,7 @@ This release prepares OMIO for stable use via `pip install omio-microscopy` whil
 
 This is the first public release of **OMIO (Open Microscopy Image I/O)**, providing a unified, reproducible, and OME-compliant image loading layer for bioimaging and microscopy data.
 
-### 📃 Summary of Changes
+### 📃 Changes
 #### ✨ Highlights
 OMIO v0.1.1 establishes the core design principles of the project: a single, canonical in-memory representation for microscopy images and metadata, explicit handling of OME axes, and robust support for large datasets via Zarr.
 
