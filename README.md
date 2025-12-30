@@ -1,4 +1,4 @@
-# OMIO: A Python library for unified I/O of multidimensional microscopy images
+# OMIO: A policy-driven Python library for reproducible microscopy image I/O
 
 ![GitHub Release](https://img.shields.io/github/v/release/FabrizioMusacchio/omio) [![PyPI version](https://img.shields.io/pypi/v/omio-microscopy.svg)](https://pypi.org/project/omio-microscopy/) [![GPLv3 License](https://img.shields.io/badge/License-GPL%20v3-green.svg)](https://omio.readthedocs.io/en/latest/overview.html#license) ![Tests](https://github.com/FabrizioMusacchio/omio/actions/workflows/omio_tests.yml/badge.svg) [![GitHub last commit](https://img.shields.io/github/last-commit/FabrizioMusacchio/omio)](https://github.com/FabrizioMusacchio/omio/commits/main/)  [![codecov](https://img.shields.io/codecov/c/github/FabrizioMusacchio/omio?logo=codecov)](https://codecov.io/gh/fabriziomusacchio/omio)  [![GitHub Issues Open](https://img.shields.io/github/issues/FabrizioMusacchio/omio)](https://github.com/FabrizioMusacchio/omio/issues) [![GitHub Issues Closed](https://img.shields.io/github/issues-closed/FabrizioMusacchio/omio?color=53c92e)](https://github.com/FabrizioMusacchio/omio/issues?q=is%3Aissue%20state%3Aclosed) [![GitHub Issues or Pull Requests](https://img.shields.io/github/issues-pr/FabrizioMusacchio/omio)](https://github.com/FabrizioMusacchio/omio/pulls)  [![Documentation Status](https://readthedocs.org/projects/omio/badge/?version=latest)](https://omio.readthedocs.io/en/latest/?badge=latest) ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/fabriziomusacchio/omio) [![PyPI - Downloads](https://img.shields.io/pypi/dm/omio-microscopy?logo=pypy&label=PiPY%20downloads&color=blue)](https://pypistats.org/packages/omio-microscopy) [![PyPI Total Downloads](https://static.pepy.tech/personalized-badge/omio-microscopy?period=total&units=INTERNATIONAL_SYSTEM&left_color=GRAY&right_color=BLUE&left_text=PiPY+total+downloads)](https://pepy.tech/projects/omio-microscopy)  [![Example Datasets on Zenodo](https://img.shields.io/badge/Example%20Datasets-10.5281%2Fzenodo.18078231-blue)](https://doi.org/10.5281/zenodo.18078231) [![Zenodo Archive](https://img.shields.io/badge/Zenodo%20Archive-10.5281%2Fzenodo.18030883-blue)](https://doi.org/10.5281/zenodo.18030883)  [![Read the docs](https://badgen.net/badge/rtd/Documentation)](https://omio.readthedocs.io) 
 
@@ -268,7 +268,7 @@ OMIO is released under the GNU General Public License v3.0 (GPLv3). Please refer
 ## Citation
 If you use OMIO in scientific work, please cite it as:
 
-Fabrizio Musacchio. (2025). OMIO: A Python library for unified I/O of multidimensional microscopy images. Zenodo. <https://doi.org/10.5281/zenodo.18030883>
+Fabrizio Musacchio. (2025). OMIO: A policy-driven Python library for reproducible microscopy image I/O. Zenodo. <https://doi.org/10.5281/zenodo.18030883>
 
 On Zenodo, you can select other citation formats as needed as well as a DOI for dedicated OMIO software versions.
 

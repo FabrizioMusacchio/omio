@@ -220,8 +220,8 @@ Citation
 
 If you use OMIO in your research, please cite it as:
 
-   Fabrizio Musacchio. (2025). OMIO: A Python library for unified 
-   I/O of multidimensional microscopy images. Zenodo. 
+   Fabrizio Musacchio. (2025). OMIO: A policy-driven Python library for reproducible 
+   microscopy image I/O. Zenodo. 
    `https://doi.org/10.5281/zenodo.18030883 <https://doi.org/10.5281/zenodo.18030883>`_
 
 On Zenodo, you can select other citation formats as needed as well 

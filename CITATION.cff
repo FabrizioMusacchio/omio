@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use OMIO in your research, please cite it as below."
-title: "OMIO: A Python library for unified I/O of multidimensional microscopy images"
+title: "OMIO: A policy-driven Python library for reproducible microscopy image I/O"
 authors:
   - family-names: Musacchio
     given-names: Fabrizio
