@@ -4,7 +4,7 @@ OMIO Documentation
 .. figure:: _static/figures/OMIO_figures.png
    :alt: MotilA pipeline overview
    :align: center
-   :figwidth: 70%
+   :figwidth: 100%
 
 .. image:: https://badgen.net/badge/icon/GitHub%20repository?icon=github&label
    :target: https://github.com/FabrizioMusacchio/omio/
