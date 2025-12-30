@@ -11,6 +11,8 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ## 🚀 OMIO v0.2.0
 
+December 29, 2025
+
 This release introduces a more consistent public API, improves TIFF and OME-TIFF handling (including multi-file OME-TIFF series and paginated stacks), strengthens napari visualization robustness, and significantly expands documentation and example data.
 
 ### 📃 Changes
@@ -84,6 +86,8 @@ Expanded and reorganized documentation, including:
 
 ## 🚀 OMIO v0.1.4
 
+Dec 23, 2025
+
 This release focuses on improving documentation and usability.
 
 ### 📃 Changes
@@ -103,11 +107,15 @@ This release focuses on establishing a stable citation and archiving workflow an
 
 ## 🚀 OMIO v0.1.3
 
+Dec 23, 2025
+
 is just a dummy release for connecting the repository to Zenodo.
 
 ---
 
 ## 🚀 OMIO v0.1.2
+
+Dec 23, 2025
 
 This release is a small maintenance update.
 
@@ -126,6 +134,8 @@ This release prepares OMIO for stable use via `pip install omio-microscopy` whil
 ---
 
 ## 🚀 OMIO v0.1.1
+
+Dec 23, 2025
 
 This is the first public release of **OMIO (Open Microscopy Image I/O)**, providing a unified, reproducible, and OME-compliant image loading layer for bioimaging and microscopy data.
 
