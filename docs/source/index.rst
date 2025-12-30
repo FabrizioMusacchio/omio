@@ -1,6 +1,11 @@
 OMIO Documentation
 ==================
 
+.. figure:: _static/figures/OMIO_figures.png
+   :alt: MotilA pipeline overview
+   :align: center
+   :figwidth: 70%
+
 .. image:: https://badgen.net/badge/icon/GitHub%20repository?icon=github&label
    :target: https://github.com/FabrizioMusacchio/omio/
    :alt: GitHub Repository
@@ -61,6 +66,7 @@ OMIO Documentation
 .. image:: https://img.shields.io/badge/Zenodo%20Archive-10.5281%2Fzenodo.18030883-blue
    :target: https://doi.org/10.5281/zenodo.18030883
    :alt: Zenodo Archive
+
 
 `OMIO (Open Microscopy Image I/O) <https://github.com/FabrizioMusacchio/omio>`_ is a policy-driven Python library 
 for reading, organizing, merging, visualizing, and exporting multidimensional 

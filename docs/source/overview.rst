@@ -1,6 +1,11 @@
 Overview
 ========
 
+.. figure:: _static/figures/OMIO_figures.png
+   :alt: MotilA pipeline overview
+   :align: center
+   :figwidth: 70%
+
 OMIO (Open Microscopy Image I/O) is a policy driven Python library for reading,
 organizing, merging, visualizing, and exporting multidimensional microscopy image
 data under explicit OME compliant axis and metadata semantics.
