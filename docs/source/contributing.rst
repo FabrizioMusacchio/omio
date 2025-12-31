@@ -11,7 +11,7 @@ reading, normalizing, and converting microscopy image data into OME compliant
 representations. Contributions are therefore evaluated not only by functionality,
 but also by clarity, reproducibility, and long term maintainability.
 
-How to contribute
+How to Contribute
 -----------------
 
 If you are interested in contributing to OMIO, the recommended entry points are:
@@ -26,7 +26,7 @@ via the `GitHub issue tracker <https://github.com/FabrizioMusacchio/OMIO/issues>
 For code changes and larger contributions, please open a pull request against
 the main repository.
 
-Contribution guidelines
+Contribution Guidelines
 -----------------------
 
 The repository contains a dedicated contribution guide in the file
@@ -44,7 +44,7 @@ Before opening a pull request, please make sure that:
 * public functions and modules are documented via docstrings
 * user facing changes are reflected in the documentation pages
 
-Requests for new file formats and reader extensions
+Requests for New File Formats and Reader Extensions
 ---------------------------------------------------
 
 In addition to direct code contributions via pull requests, users are encouraged
@@ -75,7 +75,7 @@ as OMIO deliberately avoids speculative or heuristic based format inference.
 If sharing full datasets is not possible, users are encouraged to provide the
 smallest possible cropped or anonymized file that still reproduces the issue.
 
-Code of conduct
+Code of Conduct
 ---------------
 
 All interactions in the OMIO project are governed by a `Code of Conduct <https://github.com/FabrizioMusacchio/omio?tab=coc-ov-file>`_ based on
@@ -85,8 +85,8 @@ participating in the project, you agree to abide by these guidelines.
 If you experience or observe behavior that violates the Code of Conduct, please
 report it via email to the maintainer.
 
-Where to start
---------------
+Where to Start?
+----------------
 
 If you are looking for a first contribution, the issue tracker may contain issues
 labeled as suitable starting points, for example documentation improvements,
