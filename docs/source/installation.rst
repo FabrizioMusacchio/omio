@@ -44,6 +44,12 @@ If you plan to modify the code, use an editable installation:
 
    pip install -e .
 
+or, to include development dependencies such as testing and documentation tools:
+
+.. code-block:: bash
+
+   pip install -e .[dev]
+
 Avoid mixing local source folders and installed packages with the same name in
 the same working directory, as this can lead to confusing import behavior and
 unexpected imports during development.
