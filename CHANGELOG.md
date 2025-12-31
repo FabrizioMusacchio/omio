@@ -7,6 +7,17 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 [![Zenodo Archive](https://img.shields.io/badge/Zenodo%20Archive-10.5281%2Fzenodo.18030883-blue)](https://doi.org/10.5281/zenodo.18030883)
 
+
+---
+
+**🔜 Note yet released:**
+
+
+**🎨 New logo**
+* OMIO has its first own logo now! (December 30, 2025) That's cool, but does not affect functionality or justify a new release.
+
+
+
 --- 
 
 ## 🚀 OMIO v0.2.0
@@ -82,7 +93,8 @@ Expanded and reorganized documentation, including:
 * Ensure that references to `write_ometiff` are removed or updated.
 * Highlight the API rename prominently in upgrade notes and downstream documentation.
 
---- 
+
+---
 
 ## 🚀 OMIO v0.1.4
 
@@ -109,7 +121,7 @@ This release focuses on establishing a stable citation and archiving workflow an
 
 Dec 23, 2025
 
-is just a dummy release for connecting the repository to Zenodo.
+This is just a dummy release for connecting the repository to Zenodo.
 
 ---
 
