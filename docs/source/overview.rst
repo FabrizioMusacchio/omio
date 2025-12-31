@@ -174,8 +174,7 @@ which such pipelines can be built.
 Installation
 ------------
 
-Please refer to the `installation instructions <installation>`_ for details on how to
-install OMIO and its dependencies.
+Please refer to the :doc:`installation instructions <installation>`.
 
 
 Further reading
