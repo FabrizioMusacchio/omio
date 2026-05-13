@@ -1,5 +1,5 @@
-OMIO Documentation
-==================
+OMIO: A policy-driven Python library for reproducible microscopy image I/O
+============================================================================
 
 .. figure:: _static/figures/OMIO_figures.png
    :alt: MotilA pipeline overview
