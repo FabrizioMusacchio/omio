@@ -10,11 +10,24 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
-**🔜 Note yet released:**
+## 🚀 OMIO v0.2.1
 
+May 13, 2026
 
-**🎨 New logo**
-* OMIO has its first own logo now! (December 30, 2025) That's cool, but does not affect functionality or justify a new release.
+This maintenance release restores compatibility with recent `czifile` revisions and keeps OMIO's CZI reader working across both the legacy and the current `czifile` APIs.
+
+### 📃 Changes
+#### 🧩 Fixed
+* Restored CZI reader compatibility with `czifile` `2026.4.30` and newer.
+* `read_czi` now resolves axes via scene metadata when `CziFile.axes` is no longer available.
+* `read_czi` now retrieves structured CZI metadata via `metadata(asdict=True)` when the older `metadata(raw=False)` API is unavailable.
+* Compatibility is implemented via feature detection instead of a hard dependency-version check, preserving support for older `czifile` releases.
+
+#### 🧪 Testing and robustness
+* Added regression tests covering both legacy and current `czifile` CZI-reader APIs.
+
+#### 🎨 Project identity
+* OMIO has its first own logo now! (December 30, 2025) That's cool, but does not affect functionality or justify a dedicated release on its own.
 
 
 

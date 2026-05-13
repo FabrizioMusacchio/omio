@@ -2333,6 +2333,108 @@ def test_read_czi_zarr_disk_creates_cache(tmp_path):
     assert cache_dir.exists()
     assert any(p.suffix == ".zarr" for p in cache_dir.iterdir())
 
+def test_read_czi_accepts_new_czifile_scene_axes_and_asdict_metadata(monkeypatch, tmp_path):
+    dummy = tmp_path / "new_api.czi"
+    dummy.write_bytes(b"dummy")
+
+    monkeypatch.setattr(
+        "omio.omio.czi.imread",
+        lambda fname: np.arange(6, dtype=np.uint8).reshape(2, 3),
+    )
+
+    class FakeScene:
+        axes = "TX"
+        dims = ("T", "X")
+
+    class FakeCziFile:
+        def __init__(self, fname):
+            self.scenes = {0: FakeScene()}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def metadata(self, *, asdict=False):
+            if asdict is not True:
+                raise AssertionError("Expected metadata(asdict=True) for new czifile API.")
+            return {
+                "ImageDocument": {
+                    "Metadata": {
+                        "Scaling": {
+                            "Items": {
+                                "Distance": [
+                                    {"Id": "X", "Value": 1e-6},
+                                    {"Id": "Y", "Value": 2e-6},
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+
+    monkeypatch.setattr("omio.omio.czi.CziFile", FakeCziFile)
+
+    image, md = read_czi(str(dummy), zarr_store=None, verbose=False)
+
+    assert isinstance(image, np.ndarray)
+    assert md["axes"] == "TZCYX"
+    assert tuple(image.shape) == tuple(md["shape"])
+    assert md["PhysicalSizeX"] == pytest.approx(1.0)
+    assert md["PhysicalSizeY"] == pytest.approx(2.0)
+    assert md["PhysicalSizeZ"] == pytest.approx(1.0)
+
+def test_read_czi_falls_back_to_legacy_axes_and_raw_metadata(monkeypatch, tmp_path):
+    dummy = tmp_path / "old_api.czi"
+    dummy.write_bytes(b"dummy")
+
+    monkeypatch.setattr(
+        "omio.omio.czi.imread",
+        lambda fname: np.arange(6, dtype=np.uint8).reshape(2, 3),
+    )
+
+    class FakeLegacyCziFile:
+        axes = "TX"
+
+        def __init__(self, fname):
+            self.scenes = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def metadata(self, *, raw=True):
+            if raw is not False:
+                raise AssertionError("Expected metadata(raw=False) fallback for legacy czifile API.")
+            return {
+                "ImageDocument": {
+                    "Metadata": {
+                        "Scaling": {
+                            "Items": {
+                                "Distance": [
+                                    {"Id": "X", "Value": 3e-6},
+                                    {"Id": "Y", "Value": 4e-6},
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+
+    monkeypatch.setattr("omio.omio.czi.CziFile", FakeLegacyCziFile)
+
+    image, md = read_czi(str(dummy), zarr_store=None, verbose=False)
+
+    assert isinstance(image, np.ndarray)
+    assert md["axes"] == "TZCYX"
+    assert tuple(image.shape) == tuple(md["shape"])
+    assert md["PhysicalSizeX"] == pytest.approx(3.0)
+    assert md["PhysicalSizeY"] == pytest.approx(4.0)
+    assert md["PhysicalSizeZ"] == pytest.approx(1.0)
+
 # %% TEST READ_THORLABS_RAW
 
 # helpers:

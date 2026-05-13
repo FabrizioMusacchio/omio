@@ -1730,6 +1730,96 @@ def _find_single_yaml(folder):
             "    Will now take the first one found.")
     return os.path.join(folder, yamls[0])
 
+def _get_primary_czi_scene(czi_file):
+    """
+    Return the first available scene object from a ``czifile.CziFile``.
+
+    Recent ``czifile`` revisions moved axis-related metadata from the file object
+    to scene-level ``CziImage`` objects. This helper provides a version-tolerant
+    way to obtain that primary scene.
+    """
+    scenes = getattr(czi_file, "scenes", None)
+    if scenes is None:
+        return None
+
+    try:
+        return scenes[0]
+    except Exception:
+        pass
+
+    if hasattr(scenes, "values"):
+        try:
+            return next(iter(scenes.values()))
+        except Exception:
+            pass
+
+    try:
+        first = next(iter(scenes))
+    except Exception:
+        return None
+
+    if hasattr(first, "axes") or hasattr(first, "dims"):
+        return first
+
+    try:
+        return scenes[first]
+    except Exception:
+        return None
+
+def _get_czi_axes(czi_file):
+    """
+    Resolve axis metadata across old and new ``czifile`` APIs.
+    """
+    axes = getattr(czi_file, "axes", None)
+    if isinstance(axes, str) and axes:
+        return axes
+
+    scene = _get_primary_czi_scene(czi_file)
+    if scene is not None:
+        scene_axes = getattr(scene, "axes", None)
+        if isinstance(scene_axes, str) and scene_axes:
+            return scene_axes
+
+        dims = getattr(scene, "dims", None)
+        if dims:
+            return "".join(str(axis) for axis in dims)
+
+    raise AttributeError(
+        "Could not determine CZI axes from czifile metadata. "
+        "Neither CziFile.axes nor scene axes/dims were available."
+    )
+
+def _get_czi_metadata_dict(czi_file):
+    """
+    Return structured CZI metadata across old and new ``czifile`` APIs.
+    """
+    metadata_func = getattr(czi_file, "metadata", None)
+    if not callable(metadata_func):
+        raise AttributeError("czifile CziFile object does not provide metadata().")
+
+    try:
+        metadata = metadata_func(asdict=True)
+    except TypeError:
+        metadata = None
+
+    if isinstance(metadata, dict):
+        return metadata
+
+    try:
+        metadata = metadata_func(raw=False)
+    except TypeError as exc:
+        raise TypeError(
+            "Could not retrieve structured CZI metadata from czifile. "
+            "Expected either metadata(asdict=True) or metadata(raw=False)."
+        ) from exc
+
+    if isinstance(metadata, dict):
+        return metadata
+
+    raise TypeError(
+        "czifile metadata() did not return a dictionary for CZI metadata extraction."
+    )
+
 # function to load yaml metadata (used for Thorlabs RAW metadata):
 def _load_yaml_metadata(yaml_path):
     """
@@ -2851,7 +2941,6 @@ def read_czi(fname, physicalsize_xyz=None, pixelunit="micron", zarr_store=None,
     if verbose:
         print("Reading CZI fully into RAM...")
     CZI_image = czi.imread(fname)
-    CZI_metadata_obj = czi.CziFile(fname)
 
     # initialize metadata:
     metadata = {}
@@ -2867,17 +2956,22 @@ def read_czi(fname, physicalsize_xyz=None, pixelunit="micron", zarr_store=None,
     except Exception:
         metadata["original_creation_or_change_date"] = "N/A"
 
-    # extract CZI axes (e.g. BVCTZYX0)
-    metadata["axes"] = CZI_metadata_obj.axes
+    with czi.CziFile(fname) as CZI_metadata_obj:
+        # extract CZI axes (e.g. BVCTZYX0)
+        metadata["axes"] = _get_czi_axes(CZI_metadata_obj)
+
+        # extract scaling metadata:
+        czi_metadata_dict = _get_czi_metadata_dict(CZI_metadata_obj)
 
     # filter unwanted non-OME axes (keep only TZCYX):
     CZI_image, metadata["axes"] = _filter_image_data_for_ome_tif(CZI_image, metadata["axes"])
 
-    # extract scaling metadata:
     CZImetadata_xyz = (
-        CZI_metadata_obj.metadata(raw=False)['ImageDocument']['Metadata']
-        ['Scaling']['Items']['Distance'])
+        czi_metadata_dict['ImageDocument']['Metadata']['Scaling']['Items']['Distance'])
     conv_um = 10 ** 6
+
+    if isinstance(CZImetadata_xyz, dict):
+        CZImetadata_xyz = [CZImetadata_xyz]
 
     for item in CZImetadata_xyz:
         if item['Id'] == 'X':
