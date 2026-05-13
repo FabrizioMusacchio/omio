@@ -61,6 +61,7 @@ calls the ``read_thorlabs_raw`` function. ``read_thorlabs_raw`` is a custom OMIO
 For older Python versions (<= 3.9), the PyPI package ``utils2p`` was a common solution to
 read Thorlabs RAW files, but this package is no longer maintained and does not support
 Python 3.10 and above. Thus, OMIO provides its own implementation to read Thorlabs RAW files.
+Note, however, that OMIO itself requires Python 3.12 or newer.
 
 .. code-block:: python
 

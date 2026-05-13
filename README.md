@@ -42,7 +42,7 @@ It provides:
 
 
 ## Installation
-OMIO can be installed via pip from the Python Package Index (PyPI):
+OMIO requires **Python 3.12 or newer** and can be installed via pip from the Python Package Index (PyPI):
 
 ```bash
 conda create -n omio_env python=3.12 -y
@@ -275,4 +275,3 @@ On Zenodo, you can select other citation formats as needed as well as a DOI for 
 
 ## Acknowledgments
 OMIO was developed to support real-world microscopy workflows where data heterogeneity, scale, and metadata inconsistencies are the norm rather than the exception.
-
