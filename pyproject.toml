@@ -28,7 +28,7 @@ dependencies = [
     "numcodecs",
     "tqdm",
     "pyyaml",
-    "napari"
+    "napari[all]"
 ]
 
 
