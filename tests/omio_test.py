@@ -47,6 +47,7 @@ from omio.omio import (
     _get_original_filename_from_metadata,
     _zarr_pick_first_array,
     _merge_concat_along_axis,
+    _merge_folderstacks_with_padding,
     _load_yaml_metadata,
     _ensure_axes_in_metadata
 )
@@ -299,6 +300,36 @@ def test_standardize_imagej_metadata_info_parse_failure_prints_and_leaves_sizes_
     assert "PhysicalSizeX" not in md_out
     assert "PhysicalSizeY" not in md_out
     assert "PhysicalSizeZ" not in md_out
+
+def test_standardize_imagej_metadata_extracts_xy_from_resolution_tags():
+    class DummyTag:
+        def __init__(self, name, value):
+            self.name = name
+            self.value = value
+
+    tags = [{
+        282: DummyTag("XResolution", (2000, 1)),
+        283: DummyTag("YResolution", (4000, 1)),
+        296: DummyTag("ResolutionUnit", "CENTIMETER"),
+    }]
+
+    md_out = _standardize_imagej_metadata({}, tags=tags, verbose=False)
+
+    assert md_out["PhysicalSizeX"] == pytest.approx(10000.0 / 2000.0)
+    assert md_out["PhysicalSizeY"] == pytest.approx(10000.0 / 4000.0)
+    assert md_out["PhysicalSizeXUnit"] == "micron"
+    assert md_out["PhysicalSizeYUnit"] == "micron"
+
+def test_standardize_imagej_metadata_spacing_fallback_converts_unit_to_micron():
+    md_in = {
+        "spacing": 2.5,
+        "unit": "millimeter",
+    }
+
+    md_out = _standardize_imagej_metadata(md_in)
+
+    assert md_out["PhysicalSizeZ"] == pytest.approx(2500.0)
+    assert md_out["PhysicalSizeZUnit"] == "micron"
 
 # _standardize_lsm_metadata tests:
 def test_standardize_lsm_metadata_maps_known_keys_and_preserves_unknown():
@@ -1523,6 +1554,75 @@ def test_merge_concat_zarr_disk_writes_to_cache_folder(tmp_path):
     # check that .omio_cache exists under tmp_path
    
 
+def test_merge_folderstacks_invalid_axis_warns_and_returns_none():
+    with pytest.warns(UserWarning, match="invalid merge_along_axis"):
+        merged, md = _merge_folderstacks_with_padding(
+            images=[np.zeros((1, 1, 1, 4, 4), dtype=np.uint8)],
+            metadatas=[{"axes": "TZCYX"}],
+            merge_along_axis="X",
+            verbose=False,
+        )
+
+    assert merged is None
+    assert md is None
+
+def test_merge_folderstacks_empty_inputs_warns_and_returns_none():
+    with pytest.warns(UserWarning, match="no images to merge"):
+        merged, md = _merge_folderstacks_with_padding(
+            images=[],
+            metadatas=[],
+            merge_along_axis="T",
+            verbose=False,
+        )
+
+    assert merged is None
+    assert md is None
+
+def test_merge_folderstacks_strict_mode_shape_mismatch_returns_none(capsys):
+    images = [
+        np.zeros((1, 1, 1, 4, 4), dtype=np.uint8),
+        np.zeros((2, 1, 1, 5, 4), dtype=np.uint8),
+    ]
+    metadatas = [{"axes": "TZCYX"}, {"axes": "TZCYX"}]
+
+    merged, md = _merge_folderstacks_with_padding(
+        images=images,
+        metadatas=metadatas,
+        merge_along_axis="T",
+        zeropadding=False,
+        verbose=False,
+    )
+
+    out = capsys.readouterr().out
+    assert merged is None
+    assert md is None
+    assert "shape mismatch on non merged axis" in out
+
+def test_merge_folderstacks_wrong_axes_warns_and_returns_none():
+    with pytest.warns(UserWarning, match="expected axes"):
+        merged, md = _merge_folderstacks_with_padding(
+            images=[np.zeros((1, 1, 1, 4, 4), dtype=np.uint8)],
+            metadatas=[{"axes": "CYXZT"}],
+            merge_along_axis="T",
+            verbose=False,
+        )
+
+    assert merged is None
+    assert md is None
+
+def test_merge_folderstacks_non_5d_warns_and_returns_none():
+    with pytest.warns(UserWarning, match="expected 5D arrays"):
+        merged, md = _merge_folderstacks_with_padding(
+            images=[np.zeros((4, 4), dtype=np.uint8)],
+            metadatas=[{"axes": "TZCYX"}],
+            merge_along_axis="T",
+            verbose=False,
+        )
+
+    assert merged is None
+    assert md is None
+
+
 # _load_yaml_metadata tests:
 def test_load_yaml_metadata_valid(tmp_path):
     p = tmp_path / "meta.yaml"
@@ -2048,6 +2148,40 @@ def test_read_tif_forced_paginated_axis_p_splits_into_pages(tmp_path, monkeypatc
     for im, md in zip(images, metadatas):
         assert md["axes"] == "YX"
         assert im.shape == (10, 11)
+
+@pytest.mark.parametrize("zarr_store", ["memory", "disk"])
+def test_read_tif_forced_paginated_axis_p_writes_page_zarr_outputs(tmp_path, monkeypatch, zarr_store):
+    f = tmp_path / "p_like_zarr.tif"
+
+    data = np.random.randint(0, 255, (3, 9, 10), dtype=np.uint8)
+    tifffile.imwrite(f, data, photometric="minisblack")
+
+    def fake_ensure_axes_in_metadata(md, tif):
+        md = dict(md)
+        md["axes"] = "PYX"
+        return md
+
+    monkeypatch.setattr("omio.omio._ensure_axes_in_metadata", fake_ensure_axes_in_metadata)
+    monkeypatch.setattr("omio.omio.OME_metadata_checkup", lambda md, verbose=False: md)
+    monkeypatch.setattr(
+        "omio.omio._batch_correct_for_OME_axes_order",
+        lambda imgs, mds, memap_large_file, verbose=False: (imgs, mds),
+    )
+
+    images, metadatas = read_tif(str(f), zarr_store=zarr_store, verbose=False)
+
+    assert isinstance(images, list)
+    assert isinstance(metadatas, list)
+    assert len(images) == 3
+    assert len(metadatas) == 3
+    assert all(isinstance(im, zarr.core.array.Array) for im in images)
+    assert all(tuple(im.shape) == (9, 10) for im in images)
+    assert all(md["axes"] == "YX" for md in metadatas)
+
+    if zarr_store == "disk":
+        cache_dir = tmp_path / ".omio_cache"
+        assert cache_dir.exists()
+        assert len(list(cache_dir.glob("p_like_zarr_P*.zarr"))) == 3
 
 # multi-series TIFF tests (Weg B: no warnings expected):
 def _get_multiseries_carrier(md: dict) -> dict:
@@ -4422,6 +4556,22 @@ def test_convert_bids_batch_no_subjects_returns_empty_list_when_requested(tmp_pa
 
     assert fnames == []
 
+def test_bids_batch_convert_no_subjects_returns_none_when_not_requested(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        out = bids_batch_convert(
+            fname=str(project),
+            sub="sub",
+            exp="TP",
+            return_fnames=False,
+            verbose=False,
+        )
+
+    assert out is None
+
 # new:
 def test_bids_batch_convert_raises_if_fname_not_dir(tmp_path):
     f = tmp_path / "not_a_dir.txt"
@@ -4658,6 +4808,39 @@ def test_bids_batch_convert_merge_tagfolders_cleanup_called_only_when_zarr_store
         verbose=False,
     )
     assert calls["n"] == 1
+
+def test_bids_batch_convert_mode_b_merge_tagfolders_write_exception_is_caught(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    _build_bids_like_tree(
+        project,
+        sub_names=("sub-01",),
+        exp_names=("TP000",),
+        files_per_exp=1,
+        tagfolder_prefix="TAG_",
+        tagfolders_per_exp=2,
+    )
+
+    dummy_img = np.zeros((1, 1, 1, 2, 2), dtype=np.uint8)
+    dummy_md = {}
+
+    monkeypatch.setattr("omio.omio.imread", lambda **kwargs: (dummy_img, dummy_md))
+
+    def failing_write(**kwargs):
+        raise RuntimeError("write failed")
+
+    monkeypatch.setattr("omio.omio.imwrite", failing_write)
+
+    out = bids_batch_convert(
+        fname=str(project),
+        sub="sub",
+        exp="TP",
+        tagfolder="TAG_",
+        merge_tagfolders=True,
+        return_fnames=True,
+        verbose=False,
+    )
+
+    assert out == []
 
 # %% _dispatch_read_file
 
