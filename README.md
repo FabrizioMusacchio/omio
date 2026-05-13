@@ -45,8 +45,8 @@ It provides:
 OMIO can be installed via pip from the Python Package Index (PyPI):
 
 ```bash
-conda create -n omio-env python=3.12 -y
-conda activate omio-env
+conda create -n omio_env python=3.12 -y
+conda activate omio_env
 pip install omio-microscopy
 ```
 
