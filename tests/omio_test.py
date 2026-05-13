@@ -1570,8 +1570,9 @@ class _DummySeries0:
         self.axes = axes
 
 class _DummyTif:
-    def __init__(self, axes, has_series=True):
+    def __init__(self, axes, has_series=True, shaped_metadata=None):
         self.series = [_DummySeries0(axes)] if has_series else []
+        self.shaped_metadata = shaped_metadata
 
 def test_ensure_axes_in_metadata_sets_axes_when_missing(capsys):
     md = {}
@@ -1648,6 +1649,22 @@ def test_ensure_axes_in_metadata_falls_back_to_unknown_if_no_series(capsys):
 
     assert "Unable to extract axes" in captured
     assert out["axes"] == "unknown"
+
+def test_ensure_axes_in_metadata_uses_shaped_metadata_when_series_axes_drop_singletons():
+    md = {"shape": (1, 20, 20)}
+    tif = _DummyTif("YX", shaped_metadata=({"shape": [1, 20, 20], "axes": "TYX"},))
+
+    out = _ensure_axes_in_metadata(md, tif)
+
+    assert out["axes"] == "TYX"
+
+def test_ensure_axes_in_metadata_keeps_existing_matching_ndim_when_series_axes_are_shorter():
+    md = {"shape": (1, 20, 20), "axes": "TYX"}
+    tif = _DummyTif("YX")
+
+    out = _ensure_axes_in_metadata(md, tif)
+
+    assert out["axes"] == "TYX"
 
 
 

@@ -1277,6 +1277,56 @@ def _metadata_units_check(metadata, pixelunit="micron"):
 
     return metadata
 
+def _normalize_tiff_axes_string(reference_axes: str) -> str:
+    """
+    Normalize TIFF axis labels to OMIO's expected conventions.
+    """
+    if not isinstance(reference_axes, str):
+        return reference_axes
+
+    # in some weird tifs, an "I" is put instead of "T", so we correct for that:
+    reference_axes = reference_axes.replace('I', 'T')
+
+    # if reference_axes=="YXS", we assume we got a RGB image and thus we convert S to C:
+    if reference_axes == "YXS":
+        reference_axes = "YXC"
+
+    # if there is a "Q" in reference_axes, we convert it to "C", "T" or "Z" (depending
+    # on what is missing and in this order):
+    if 'Q' in reference_axes:
+        if 'C' not in reference_axes:
+            reference_axes = reference_axes.replace('Q', 'C')
+        elif 'T' not in reference_axes:
+            reference_axes = reference_axes.replace('Q', 'T')
+        elif 'Z' not in reference_axes:
+            reference_axes = reference_axes.replace('Q', 'Z')
+        elif 'P' not in reference_axes:
+            reference_axes = reference_axes.replace('Q', 'P')
+        else:
+            raise ValueError(
+                "Error: Unable to map axis 'Q' to C, T, Z or P, as all are already present in reference axes."
+            )
+
+    return reference_axes
+
+def _get_axes_from_shaped_metadata(shaped_metadata):
+    """
+    Extract an axis string from tifffile's shaped metadata if available.
+    """
+    if isinstance(shaped_metadata, dict):
+        candidates = [shaped_metadata]
+    elif isinstance(shaped_metadata, (list, tuple)):
+        candidates = [item for item in shaped_metadata if isinstance(item, dict)]
+    else:
+        candidates = []
+
+    for item in candidates:
+        axes = item.get("axes")
+        if isinstance(axes, str) and axes:
+            return axes
+
+    return None
+
 # function to check and update metadata axes and its correct order from reading:
 def _ensure_axes_in_metadata(metadata, tif):
     """
@@ -1317,28 +1367,23 @@ def _ensure_axes_in_metadata(metadata, tif):
         print("Error: Unable to extract axes from tif.series[0]. Setting to 'unknown'.")
         reference_axes = 'unknown'
 
-    # in some weird tifs, an "I" is put instead of "T", so we correct for that:
-    reference_axes = reference_axes.replace('I', 'T')
-    
-    # if reference_axes=="YXS", we assume we got a RGB image and thus we convert S to C:
-    if reference_axes == "YXS":
-        reference_axes = "YXC"
-        
-    # if there is a "Q" in reference_axes, we convert it to "C", "T" or "Z" (depending 
-    # on what is missing and in this order):
-    if 'Q' in reference_axes:
-        if 'C' not in reference_axes:
-            reference_axes = reference_axes.replace('Q', 'C')
-        elif 'T' not in reference_axes:
-            reference_axes = reference_axes.replace('Q', 'T')
-        elif 'Z' not in reference_axes:
-            reference_axes = reference_axes.replace('Q', 'Z')
-        elif 'P' not in reference_axes:
-            reference_axes = reference_axes.replace('Q', 'P')
-        else:
-            # if C, T and Z are already present, we give a raise error:
-            raise ValueError("Error: Unable to map axis 'Q' to C, T, Z or P, as all are already present in reference axes.")
-            
+    reference_axes = _normalize_tiff_axes_string(reference_axes)
+    shaped_axes = _normalize_tiff_axes_string(
+        _get_axes_from_shaped_metadata(getattr(tif, "shaped_metadata", None))
+    )
+    target_ndim = len(metadata.get("shape", ())) if metadata.get("shape") is not None else 0
+
+    if shaped_axes and target_ndim and len(reference_axes) != target_ndim and len(shaped_axes) == target_ndim:
+        reference_axes = shaped_axes
+
+    existing_axes = metadata.get("axes")
+    if (
+        isinstance(existing_axes, str)
+        and target_ndim
+        and len(existing_axes) == target_ndim
+        and len(reference_axes) != target_ndim
+    ):
+        reference_axes = _normalize_tiff_axes_string(existing_axes)
 
     if 'axes' in metadata:
         # overwrite if the existing axes do not match:
@@ -4856,7 +4901,7 @@ def _squeeze_zarr_to_napari_cache_dask(src, fname, axes, cache_folder_name=".omi
     if squeeze_axes:
         darr = da.squeeze(darr, axis=tuple(squeeze_axes))
 
-    da.to_zarr(darr, target_path, zarr_read_kwargs={"mode": "w"})
+    da.to_zarr(darr, target_path, mode="w")
     squeezed_zarr = zarr.open(target_path, mode="r")
 
     return squeezed_zarr, squeezed_axes

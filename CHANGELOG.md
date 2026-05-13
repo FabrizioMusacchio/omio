@@ -14,7 +14,7 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 May 13, 2026
 
-This maintenance release restores compatibility with recent `czifile` revisions and keeps OMIO's CZI reader working across both the legacy and the current `czifile` APIs.
+This maintenance release restores compatibility with recent `czifile`, `tifffile`, and `zarr`/Dask dependency revisions and keeps OMIO's CZI, TIFF, conversion, and napari-cache workflows working across both legacy and current APIs.
 
 ### 📃 Changes
 #### 🧩 Fixed
@@ -22,9 +22,14 @@ This maintenance release restores compatibility with recent `czifile` revisions 
 * `read_czi` now resolves axes via scene metadata when `CziFile.axes` is no longer available.
 * `read_czi` now retrieves structured CZI metadata via `metadata(asdict=True)` when the older `metadata(raw=False)` API is unavailable.
 * Compatibility is implemented via feature detection instead of a hard dependency-version check, preserving support for older `czifile` releases.
+* Restored TIFF axis handling for files where recent `tifffile` revisions collapse singleton dimensions in `series[0].axes` but still preserve the full shape in `shaped_metadata`.
+* `read_tif` now uses `shaped_metadata` as a fallback axis source when `tifffile` drops singleton axes such as `T=1` or `Z=1`.
+* Restored compatibility with current `dask.array.to_zarr` / `zarr` behavior by switching napari-cache writes away from the deprecated `zarr_read_kwargs` path and to the current `mode="w"` API.
 
 #### 🧪 Testing and robustness
 * Added regression tests covering both legacy and current `czifile` CZI-reader APIs.
+* Added regression tests covering TIFF axis fallback from `shaped_metadata` when singleton dimensions are omitted from `series[0].axes`.
+* Full `pytest` suite passes again under the current dependency set.
 
 #### 🎨 Project identity
 * OMIO has its first own logo now! (December 30, 2025) That's cool, but does not affect functionality or justify a dedicated release on its own.
