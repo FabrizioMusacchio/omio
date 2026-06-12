@@ -217,14 +217,23 @@ For full license terms, see the ``LICENSE`` file in the `repository <https://git
 Citation
 --------
 
-If you use OMIO in your research, please cite it as:
+If you use OMIO in scientific work, please cite it as:
 
-   Fabrizio Musacchio. (2025). OMIO: A policy-driven Python library for reproducible 
-   microscopy image I/O. Zenodo. 
+   Fabrizio Musacchio, Henrike Antony, Sophie Crux, Falko Fuhrmann, 
+   Nala Gockel, Denise Marie Hoffmann, Dilek Mercan, Felix Christopher Nebeling, 
+   Martin Fuhrmann, *OMIO: A policy-driven Python library for reproducible 
+   microscopy image I/O*, bioRxiv 2026.06.09.731118; doi: 
+   `10.64898/2026.06.09.731118 <https://doi.org/10.64898/2026.06.09.731118>`_
+
+Additionally, you can also cite the software archive on Zenodo:
+
+   Fabrizio Musacchio. (2025). OMIO: A policy-driven Python library for 
+   reproducible microscopy image I/O. Zenodo. 
    `https://doi.org/10.5281/zenodo.18030883 <https://doi.org/10.5281/zenodo.18030883>`_
 
-On Zenodo, you can select other citation formats as needed as well 
-as a DOI for dedicated OMIO software versions.
+On Zenodo, you can select other citation formats as needed as well as a DOI 
+for dedicated OMIO software versions.
+
 
 Acknowledgements
 ----------------
