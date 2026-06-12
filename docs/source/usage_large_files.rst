@@ -85,6 +85,43 @@ OMIO will reuse the existing napari viewer instance to avoid opening multiple wi
 In practice, any new image opened with ``om.open_in_napari`` will be added as a new layer
 to the existing napari viewer.
 
+Reuse an Existing On-Disk OMIO Cache
+------------------------------------
+
+If you repeatedly open the same large file with ``zarr_store="disk"``, OMIO can reuse
+an already existing, validated cache store instead of rebuilding it from the original
+image each time. This is useful for iterative interactive work on large files.
+
+When OMIO creates a disk-backed cache, it also stores the OMIO metadata and a cache
+manifest directly in the Zarr attributes. On later reads, ``reuse_disk_cache=True``
+instructs OMIO to validate that manifest against the current source file and read
+settings before reusing the cache.
+
+.. code-block:: python
+
+   fname = "example_data/tif_files_from_3P_paper/Supplementary_Video_4.tif"
+
+   # Start from a clean state so the first call definitely builds the cache:
+   om.cleanup_omio_cache(fname, full_cleanup=False)
+
+   # First call: creates .omio_cache/<basename>.zarr and stores OMIO cache metadata in it.
+   image_cache_1, metadata_cache_1 = om.imread(fname, zarr_store="disk")
+   print(f"First read shape: {image_cache_1.shape}, axes: {metadata_cache_1.get('axes', 'N/A')}")
+   print(image_cache_1.attrs["omio_cache_info"])
+
+   # Second call: reuses the existing validated disk cache instead of rebuilding it.
+   image_cache_2, metadata_cache_2 = om.imread(
+       fname,
+       zarr_store="disk",
+       reuse_disk_cache=True,
+   )
+   print(f"Second read shape: {image_cache_2.shape}, axes: {metadata_cache_2.get('axes', 'N/A')}")
+   print(image_cache_2.attrs["omio_cache_info"]["source_path"])
+
+If the source file changed, or if relevant settings such as explicit physical pixel
+size overrides no longer match, OMIO automatically falls back to rebuilding the cache
+from the original image instead of reusing a stale store.
+
 There is intentionally no automatic cleanup of the temporary Zarr stores, as users may
 want to reuse them for downstream processing. To manually clean up the temporary Zarr 
 stores created by OMIO, use:
@@ -122,7 +159,7 @@ First, memory-map the image on disk:
 
 .. code-block:: python
 
-   image_large, metadata_large = om.imread(fname, zarr_store="disk")
+   image_large, metadata_large = om.imread(fname, zarr_store="disk", reuse_disk_cache=True)
 
 This stack has stored an erroneous ``PhysicalSizeZ`` in its ImageJ metadata, which is set
 to ``0.0000185`` microns instead of the correct value of ``5`` microns according to the
@@ -173,4 +210,3 @@ After finishing the inspection, the temporary Zarr stores can be removed manuall
 .. code-block:: python
 
    om.cleanup_omio_cache(fname, full_cleanup=True)
-

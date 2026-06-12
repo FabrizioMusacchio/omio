@@ -8,7 +8,7 @@ use cases.
 
 You can use the code examples provided here as a starting point for your own
 projects. All code snippets are also available in the example script
-``usage_example_interactive.py``located in the ``additional_scripts`` folder of the
+``usage_example_interactive.py`` located in the ``additional_scripts`` folder of the
 OMIO repository. That script is meant to be run interactively, e.g., using
 VS Code's interactive window features.
 
@@ -24,5 +24,4 @@ VS Code's interactive window features.
    usage_folder_reading
    usage_batch_conversion
    usage_template_functions
-
 

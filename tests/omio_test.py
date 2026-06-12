@@ -55,6 +55,7 @@ from omio.omio import (
 import os
 import re
 import copy
+import json
 from pathlib import Path
 import numpy as np
 import pytest
@@ -2060,6 +2061,57 @@ def test_read_tif_zarr_disk_creates_cache_and_returns_zarr_array(tmp_path):
     assert cache.exists()
     assert any(p.suffix == ".zarr" for p in cache.iterdir())
 
+def test_read_tif_zarr_disk_persists_metadata_and_cache_info_in_zarr_json(tmp_path):
+    f = tmp_path / "plain.tif"
+    tifffile.imwrite(f, np.zeros((6, 8), dtype=np.uint16))
+
+    image, md = read_tif(str(f), zarr_store="disk", verbose=False)
+
+    assert isinstance(image, zarr.core.array.Array)
+    assert "omio_metadata" in image.attrs
+    assert "omio_cache_info" in image.attrs
+    assert image.attrs["omio_metadata"]["axes"] == "TZCYX"
+    assert image.attrs["omio_cache_info"]["reader_name"] == "tif"
+
+    zarr_json = tmp_path / ".omio_cache" / "plain.zarr" / "zarr.json"
+    payload = json.loads(zarr_json.read_text(encoding="utf-8"))
+    assert payload["attributes"]["omio_metadata"]["axes"] == "TZCYX"
+    assert payload["attributes"]["omio_cache_info"]["reader_name"] == "tif"
+
+def test_read_tif_reuse_disk_cache_avoids_reopening_original_file(tmp_path, monkeypatch):
+    f = tmp_path / "plain.tif"
+    tifffile.imwrite(f, np.arange(6 * 8, dtype=np.uint16).reshape(6, 8))
+
+    image1, md1 = read_tif(str(f), zarr_store="disk", verbose=False)
+
+    def fail_tiff_open(*args, **kwargs):
+        raise AssertionError("Original TIFF should not be reopened when reuse_disk_cache=True")
+
+    monkeypatch.setattr("tifffile.TiffFile", fail_tiff_open)
+
+    image2, md2 = read_tif(str(f), zarr_store="disk", reuse_disk_cache=True, verbose=False)
+
+    assert isinstance(image2, zarr.core.array.Array)
+    assert tuple(image2.shape) == tuple(image1.shape)
+    assert md2["axes"] == md1["axes"]
+    assert np.array_equal(np.asarray(image2), np.asarray(image1))
+
+def test_read_tif_reuse_disk_cache_falls_back_when_cache_has_no_omio_payload(tmp_path):
+    f = tmp_path / "plain.tif"
+    tifffile.imwrite(f, np.arange(6 * 8, dtype=np.uint16).reshape(6, 8))
+
+    cache_path = tmp_path / ".omio_cache" / "plain.zarr"
+    cache_path.parent.mkdir(exist_ok=True)
+    stale = zarr.open(str(cache_path), mode="w", shape=(6, 8), dtype=np.uint16, chunks=(6, 8))
+    stale[:] = 0
+
+    image, md = read_tif(str(f), zarr_store="disk", reuse_disk_cache=True, verbose=False)
+
+    assert isinstance(image, zarr.core.array.Array)
+    assert md["axes"] == "TZCYX"
+    assert "omio_metadata" in image.attrs
+    assert "omio_cache_info" in image.attrs
+
 
 # paginated TIFF tests:
 def test_read_tif_paginated_returns_lists_and_contains_expected_xy_shapes(tmp_path, capsys):
@@ -2484,6 +2536,33 @@ def test_read_czi_zarr_disk_creates_cache(tmp_path):
     assert cache_dir.exists()
     assert any(p.suffix == ".zarr" for p in cache_dir.iterdir())
 
+def test_read_czi_reuse_disk_cache_avoids_rereading_source(tmp_path, monkeypatch):
+    src = _czi_fixture_path()
+    if not src.exists():
+        pytest.skip(f"Missing test fixture file: {src}")
+
+    dst = tmp_path / src.name
+    dst.write_bytes(src.read_bytes())
+
+    image1, md1 = read_czi(str(dst), zarr_store="disk", verbose=False)
+
+    monkeypatch.setattr(
+        "omio.omio.czi.imread",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("CZI source should not be reread")),
+    )
+
+    class FailCziFile:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("CZI metadata source should not be reopened")
+
+    monkeypatch.setattr("omio.omio.czi.CziFile", FailCziFile)
+
+    image2, md2 = read_czi(str(dst), zarr_store="disk", reuse_disk_cache=True, verbose=False)
+
+    assert isinstance(image2, zarr.core.array.Array)
+    assert tuple(image2.shape) == tuple(image1.shape)
+    assert md2["axes"] == md1["axes"]
+
 def test_read_czi_accepts_new_czifile_scene_axes_and_asdict_metadata(monkeypatch, tmp_path):
     dummy = tmp_path / "new_api.czi"
     dummy.write_bytes(b"dummy")
@@ -2780,6 +2859,32 @@ def test_read_thorlabs_raw_zarr_disk_creates_cache(tmp_path):
     cache_dir = tmp_path / ".omio_cache"
     assert cache_dir.exists()
     assert any(p.suffix == ".zarr" for p in cache_dir.iterdir())
+
+def test_read_thorlabs_raw_reuse_disk_cache_avoids_remapping_source(tmp_path, monkeypatch):
+    T, Z, C, Y, X = 1, 2, 1, 8, 9
+    raw_path = tmp_path / "example.raw"
+    xml_path = tmp_path / "example.xml"
+
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+    _write_example_thorlabs_xml(xml_path, X=X, Y=Y, C=C, T=T, Z=Z, bits=16)
+
+    image1, md1 = read_thorlabs_raw(str(raw_path), zarr_store="disk", verbose=False)
+
+    monkeypatch.setattr(
+        "numpy.memmap",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("RAW source should not be remapped")),
+    )
+
+    image2, md2 = read_thorlabs_raw(
+        str(raw_path),
+        zarr_store="disk",
+        reuse_disk_cache=True,
+        verbose=False,
+    )
+
+    assert isinstance(image2, zarr.core.array.Array)
+    assert tuple(image2.shape) == tuple(image1.shape)
+    assert md2["axes"] == md1["axes"]
 
 def test_read_thorlabs_raw_physicalsize_override_applied(tmp_path):
     T, Z, C, Y, X = 1, 1, 1, 4, 4

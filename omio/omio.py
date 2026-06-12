@@ -97,6 +97,7 @@ scientific microscopy data processing workflows.
 # %% IMPORTS
 import os, re
 import hashlib
+from copy import deepcopy
 
 from importlib.metadata import version, PackageNotFoundError, packages_distributions
 
@@ -143,6 +144,7 @@ _OMIO_VERSION = _resolve_omio_version()
 _OME_AXES = "TZCYX" # this is the canonical OME axes order. DO NOT CHANGE!
 _AXIS_TO_INDEX = {"T": 0, "Z": 1, "C": 2, "Y": 3, "X": 4} # DO NOT CHANGE!
 _ALLOWED_MERGE_AXES = {"T", "Z", "C"}
+_CACHE_SCHEMA_VERSION = 1
 
 # make current _OMIO_VERSION available as 'version' attribute outside the module:
 version = _OMIO_VERSION
@@ -165,6 +167,208 @@ def hello_world():
         "Hello from omio.py! OMIO version: <version>"
     """
     print("Hello from omio.py! OMIO version:", _OMIO_VERSION)
+
+def _jsonify_for_storage(obj):
+    """
+    Convert nested objects into JSON-compatible plain Python containers.
+
+    This helper is used before persisting OMIO metadata and cache information into
+    Zarr attributes. It recursively converts NumPy scalar types, tuples, lists,
+    dicts, and paths into JSON-serializable primitives while leaving ordinary
+    Python scalars unchanged.
+    """
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, tuple):
+        return [_jsonify_for_storage(v) for v in obj]
+    if isinstance(obj, list):
+        return [_jsonify_for_storage(v) for v in obj]
+    if isinstance(obj, dict):
+        return {str(k): _jsonify_for_storage(v) for k, v in obj.items()}
+    if isinstance(obj, os.PathLike):
+        return os.fspath(obj)
+    return obj
+
+def _restore_cached_metadata(metadata: Dict[str, Any], shape) -> Dict[str, Any]:
+    """
+    Normalize metadata loaded back from a persisted disk-cache entry.
+
+    Cached metadata are stored through JSON-like Zarr attributes, which means
+    tuples may come back as lists. This helper restores the keys that OMIO relies
+    on most strongly to their expected runtime representation.
+    """
+    md = deepcopy(metadata)
+    md["shape"] = tuple(shape)
+    if "axes" in md and md["axes"] is not None:
+        md["axes"] = str(md["axes"])
+    return md
+
+def _get_disk_cache_path(fname: str, suffix: str = "") -> str:
+    """
+    Return OMIO's canonical on-disk Zarr cache path for a source file.
+
+    Parameters
+    ----------
+    fname : str
+        Source file path.
+    suffix : str, optional
+        Optional suffix inserted before the ``.zarr`` extension. This is used for
+        derived cache variants such as per-page paginated TIFF outputs.
+    """
+    fname_base, _ = os.path.splitext(os.path.basename(fname))
+    cache_folder = os.path.join(os.path.dirname(fname), ".omio_cache")
+    return os.path.join(cache_folder, fname_base + suffix + ".zarr")
+
+def _get_reader_backend_versions(reader_name: str) -> Dict[str, str | None]:
+    """
+    Collect backend version metadata relevant to a given OMIO reader.
+    """
+    versions = {
+        "numpy": getattr(np, "__version__", None),
+        "zarr": getattr(zarr, "__version__", None),
+    }
+    if reader_name == "tif":
+        versions["tifffile"] = getattr(tifffile, "__version__", None)
+    elif reader_name == "czi":
+        versions["czifile"] = getattr(czi, "__version__", None)
+    elif reader_name == "raw":
+        versions["yaml"] = getattr(yaml, "__version__", None)
+    return versions
+
+def _build_disk_cache_info(fname: str,
+                           reader_name: str,
+                           pixelunit: str,
+                           physicalsize_xyz_override: tuple[float, float, float] | None,
+                           cache_kind: str = "primary") -> Dict[str, Any]:
+    """
+    Build a cache manifest describing the provenance and validity constraints of a
+    disk-backed OMIO Zarr cache.
+    """
+    stat = os.stat(fname)
+    return {
+        "schema_version": _CACHE_SCHEMA_VERSION,
+        "cache_kind": cache_kind,
+        "reader_name": reader_name,
+        "source_path": os.path.abspath(fname),
+        "source_size": int(stat.st_size),
+        "source_mtime_ns": int(stat.st_mtime_ns),
+        "pixelunit": pixelunit,
+        "physicalsize_xyz_override": (
+            [float(v) for v in physicalsize_xyz_override]
+            if physicalsize_xyz_override is not None else None
+        ),
+        "omio_version": _OMIO_VERSION,
+        "backend_versions": _get_reader_backend_versions(reader_name),
+    }
+
+def _write_disk_cache_payload(zarr_array: "zarr.core.array.Array",
+                              metadata: Dict[str, Any],
+                              cache_info: Dict[str, Any],
+                              verbose: bool = False) -> None:
+    """
+    Persist OMIO metadata and cache validation info directly into a Zarr store.
+
+    OMIO stores both payloads as Zarr attributes. In current Zarr v3 layouts these
+    attributes are serialized into the store's ``zarr.json`` file, which keeps the
+    cache self-contained and avoids maintaining a second metadata sidecar file.
+    """
+    zarr_array.attrs["omio_metadata"] = _jsonify_for_storage(metadata)
+    zarr_array.attrs["omio_cache_info"] = _jsonify_for_storage(cache_info)
+    if verbose:
+        print("  Stored OMIO metadata and cache info in Zarr attrs.")
+
+def _validate_disk_cache_info(cache_info: Dict[str, Any],
+                              fname: str,
+                              reader_name: str,
+                              pixelunit: str,
+                              physicalsize_xyz_override: tuple[float, float, float] | None) -> tuple[bool, str]:
+    """
+    Validate whether a persisted disk-cache manifest matches the current read
+    request closely enough for safe reuse.
+    """
+    try:
+        stat = os.stat(fname)
+    except Exception as exc:
+        return False, f"source stat failed: {exc}"
+
+    expected_override = (
+        [float(v) for v in physicalsize_xyz_override]
+        if physicalsize_xyz_override is not None else None
+    )
+    expected = {
+        "schema_version": _CACHE_SCHEMA_VERSION,
+        "reader_name": reader_name,
+        "source_path": os.path.abspath(fname),
+        "source_size": int(stat.st_size),
+        "source_mtime_ns": int(stat.st_mtime_ns),
+        "pixelunit": pixelunit,
+        "physicalsize_xyz_override": expected_override,
+        "omio_version": _OMIO_VERSION,
+        "backend_versions": _get_reader_backend_versions(reader_name),
+    }
+
+    for key, expected_value in expected.items():
+        actual_value = cache_info.get(key)
+        if actual_value != expected_value:
+            return False, f"cache manifest mismatch for '{key}'"
+    return True, "ok"
+
+def _try_reuse_disk_cache(fname: str,
+                          reader_name: str,
+                          pixelunit: str,
+                          physicalsize_xyz_override: tuple[float, float, float] | None,
+                          verbose: bool = False) -> tuple[Union["zarr.core.array.Array", None], Union[Dict[str, Any], None]]:
+    """
+    Attempt to reopen and validate an existing OMIO disk cache for a source file.
+
+    Returns ``(None, None)`` when reuse is not possible or not safe.
+    """
+    zarr_path = _get_disk_cache_path(fname)
+    if not os.path.exists(zarr_path):
+        return None, None
+
+    try:
+        image = zarr.open(zarr_path, mode="r")
+    except Exception as exc:
+        if verbose:
+            print(f"  Existing disk cache could not be opened. Rebuilding cache. Reason: {exc}")
+        return None, None
+
+    if not isinstance(image, zarr.core.array.Array):
+        if verbose:
+            print("  Existing disk cache is not a Zarr array. Rebuilding cache.")
+        return None, None
+
+    cache_metadata = image.attrs.get("omio_metadata")
+    cache_info = image.attrs.get("omio_cache_info")
+    if cache_metadata is None or cache_info is None:
+        if verbose:
+            print("  Existing disk cache has no OMIO metadata/cache info. Rebuilding cache.")
+        return None, None
+
+    valid, reason = _validate_disk_cache_info(
+        cache_info=cache_info,
+        fname=fname,
+        reader_name=reader_name,
+        pixelunit=pixelunit,
+        physicalsize_xyz_override=physicalsize_xyz_override,
+    )
+    if not valid:
+        if verbose:
+            print(f"  Existing disk cache is stale or incompatible. Rebuilding cache. Reason: {reason}")
+        return None, None
+
+    metadata = _restore_cached_metadata(cache_metadata, image.shape)
+    if "axes" not in metadata:
+        if verbose:
+            print("  Existing disk cache metadata are incomplete. Rebuilding cache.")
+        return None, None
+
+    if verbose:
+        print(f"  Reusing existing OMIO disk cache: {zarr_path}")
+    return image, metadata
 
 # function for correcting the axes order to OME-conform:
 def _reorder_numpy(arr, axes_string, OME_axes, OME_axes_order):
@@ -1690,6 +1894,89 @@ def _copy_to_zarr_in_xy_slices(src, dst, desc="slice-wise copying to Zarr"):
         idx = outer_idx + (slice(None), slice(None))
         dst[idx] = src[idx]
 
+def _split_paginated_tiff_stack(image,
+                                metadata: Dict[str, Any],
+                                fname: str,
+                                zarr_store: str | None,
+                                verbose: bool = True) -> Tuple[List[Any], List[Dict[str, Any]]]:
+    """
+    Split a paginated TIFF/LSM stack (axis ``P``) into per-page OMIO images.
+
+    This helper is shared between the normal TIFF reader path and disk-cache
+    reuse, so it only depends on the already prepared image array and metadata.
+    """
+    axis_to_use = "P"
+    if verbose:
+        print(f"  Detected paginated TIFF/LSM (axis '{axis_to_use}'); splitting into individual pages.")
+
+    metadata = metadata.copy()
+    metadata["original_metadata_type"] = "paginated_tif/lsm"
+    metadata["spacing"] = metadata["PhysicalSizeZ"]
+    metadata["PhysicalSizeXUnit"] = metadata["unit"]
+    metadata["PhysicalSizeYUnit"] = metadata["unit"]
+    metadata["PhysicalSizeZUnit"] = metadata["unit"]
+    metadata["OMIO_VERSION"] = _OMIO_VERSION
+
+    p_index = metadata["axes"].index(axis_to_use)
+    nP = image.shape[p_index]
+    axes_wo_P = metadata["axes"][:p_index] + metadata["axes"][p_index+1:]
+
+    images = []
+    metadatas = []
+    for p in range(nP):
+        slicer = [slice(None)] * image.ndim
+        slicer[p_index] = p
+        page_data = image[tuple(slicer)]
+
+        if page_data.ndim == image.ndim:
+            page_data = np.squeeze(page_data, axis=p_index)
+
+        page_md = metadata.copy()
+        page_md["axes"] = axes_wo_P
+        page_md["shape"] = page_data.shape
+
+        if zarr_store is None:
+            images.append(np.asarray(page_data))
+        else:
+            page_shape = page_data.shape
+            chunks = compute_default_chunks(page_shape, axes_wo_P)
+            if verbose:
+                print(f"    Page {p}: using chunks {chunks}")
+
+            if zarr_store == "memory":
+                store = zarr.storage.MemoryStore()
+                page_zarr = zarr.open(
+                    store=store,
+                    mode="w",
+                    shape=page_shape,
+                    dtype=page_data.dtype,
+                    chunks=chunks)
+            else:
+                page_path = _get_disk_cache_path(fname, suffix=f"_P{p}")
+                os.makedirs(os.path.dirname(page_path), exist_ok=True)
+                if os.path.exists(page_path):
+                    shutil.rmtree(page_path)
+                page_zarr = zarr.open(
+                    page_path,
+                    mode="w",
+                    shape=page_shape,
+                    dtype=page_data.dtype,
+                    chunks=chunks)
+
+            _copy_to_zarr_in_xy_slices(page_data, page_zarr, desc=f"    Copying page {p} to Zarr")
+            images.append(page_zarr)
+
+        page_md = OME_metadata_checkup(page_md, verbose=verbose)
+        metadatas.append(page_md)
+
+    memap_large_file = (zarr_store == "disk")
+    images, metadatas = _batch_correct_for_OME_axes_order(images, metadatas, memap_large_file, verbose=verbose)
+
+    if verbose:
+        print(f"  Finished splitting paginated TIFF into {nP} pages.")
+        print("Reading paginated TIFF completed.")
+    return images, metadatas
+
 # function to compute default chunking for Zarr arrays out of image shape and axes:
 def compute_default_chunks(shape, axes, max_xy_chunk=1024): 
     """
@@ -2200,7 +2487,7 @@ def OME_metadata_checkup(metadata: dict,
 
 # tif or lsm file reader (including series and paginated files):
 def read_tif(fname, physicalsize_xyz=None, pixelunit="micron", 
-             zarr_store=None, return_list=False, verbose=True):
+             zarr_store=None, return_list=False, reuse_disk_cache=False, verbose=True):
     """
     Read TIFF family files into OMIO's canonical representation.
 
@@ -2243,6 +2530,12 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
     return_list : bool, optional
         If True, force backward-compatible list return for non-paginated inputs by
         returning ``[image]`` and ``[metadata]``. Default is False.
+    reuse_disk_cache : bool, optional
+        If True and ``zarr_store="disk"``, OMIO first checks whether a compatible
+        on-disk cache already exists and reuses it instead of rebuilding the Zarr
+        store from the original TIFF. The existing cache is reused only if its
+        persisted manifest matches the current source file and read settings.
+        Default is False.
     verbose : bool, optional
         If True, print diagnostic progress messages. Default is True.
 
@@ -2275,7 +2568,9 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
       axes and may reorder existing axes. The updated axis string is stored in the
       returned metadata.
     * When `zarr_store="disk"`, the function may create and overwrite paths under
-      ``.omio_cache``.
+      ``.omio_cache``. OMIO metadata and cache validation info are persisted in the
+      Zarr attributes so the store can later be reopened without rereading the
+      original file.
     * Multi-file OME-TIFF series are supported. In this layout, individual OME-TIFF
       files each store subsets of the full dataset (e.g. single time points,
       channels, or z-slices). OMIO/tifffile reconstructs the complete logical image by
@@ -2354,6 +2649,30 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
     else:
         physicalsize_xyz_ext = tuple(float(v) for v in physicalsize_xyz)
         set_input_pixelsize = True
+    cache_override = physicalsize_xyz_ext if set_input_pixelsize else None
+
+    if zarr_store == "disk" and reuse_disk_cache:
+        cached_image, cached_metadata = _try_reuse_disk_cache(
+            fname=fname,
+            reader_name="tif",
+            pixelunit=pixelunit,
+            physicalsize_xyz_override=cache_override,
+            verbose=verbose,
+        )
+        if cached_image is not None:
+            if "P" in cached_metadata.get("axes", ""):
+                return _split_paginated_tiff_stack(
+                    cached_image,
+                    cached_metadata,
+                    fname=fname,
+                    zarr_store=zarr_store,
+                    verbose=verbose,
+                )
+            if verbose:
+                print("Finished reading TIFF from reused disk cache.")
+            if return_list:
+                return [cached_image], [cached_metadata]
+            return cached_image, cached_metadata
 
     # read the tif file:
     with tifffile.TiffFile(fname) as tif:
@@ -2689,9 +3008,8 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
                     dtype=image.dtype,
                     chunks=chunks)
             else:
-                zarr_cache_folder = os.path.join(os.path.dirname(fname), ".omio_cache")
-                os.makedirs(zarr_cache_folder, exist_ok=True)
-                zarr_cache_path = os.path.join(zarr_cache_folder, fname_base + ".zarr")
+                zarr_cache_path = _get_disk_cache_path(fname)
+                os.makedirs(os.path.dirname(zarr_cache_path), exist_ok=True)
                 if os.path.exists(zarr_cache_path):
                     shutil.rmtree(zarr_cache_path)
 
@@ -2728,19 +3046,6 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
         
         # handle paginated TIFFs (axis 'P'):
         if "P" in metadata["axes"]:
-            axis_to_use = "P"
-            """ if "P" in metadata["axes"]:
-                axis_to_use = "P"
-            elif "S" in metadata["axes"]:
-                axis_to_use = "S"
-                # rename S to P in axes string for consistency:
-                #metadata["axes"] = metadata["axes"].replace("S", "P") """
-            if verbose:
-                print(f"  Detected paginated TIFF/LSM (axis '{axis_to_use}'); splitting into individual pages.")
-
-            p_index = metadata["axes"].index(axis_to_use)
-            metadata["original_metadata_type"] = "paginated_tif/lsm"
-
             try:
                 multi_page_metadata = tif.pages[0].tags["CZ_LSMINFO"].value
                 metadata["PhysicalSizeX"] = multi_page_metadata["VoxelSizeX"] * conv_um
@@ -2758,88 +3063,22 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
                 metadata["PhysicalSizeY"] = physicalsize_xyz_ext[1]
                 metadata["PhysicalSizeZ"] = physicalsize_xyz_ext[2]
 
-            metadata["spacing"] = metadata["PhysicalSizeZ"]
-            metadata["PhysicalSizeXUnit"] = metadata["unit"]
-            metadata["PhysicalSizeYUnit"] = metadata["unit"]
-            metadata["OMIO_VERSION"] = _OMIO_VERSION
-
-            nP = image.shape[p_index]
-            #axes_wo_P = metadata["axes"].replace(axis_to_use, "")
-            p_index = metadata["axes"].index(axis_to_use)
-            axes_wo_P = metadata["axes"][:p_index] + metadata["axes"][p_index+1:]
-
-            images = []
-            metadatas = []
-
-            # For paginated stacks:
-            #   if zarr_store is None: return NumPy pages
-            #   if zarr_store is "disk": write per-page Zarr to disk (memory-friendly)
-            #   if zarr_store is "memory": create per-page MemoryStore Zarr arrays
-            for p in range(nP):
-                # p = 0  # for testing only
-                slicer = [slice(None)] * image.ndim
-                slicer[p_index] = p
-                page_data = image[tuple(slicer)]
-
-                # Remove singleton P/S-axis if it still exists
-                # (Depending on backend, indexing may keep dims)
-                if page_data.ndim == image.ndim:
-                    page_data = np.squeeze(page_data, axis=p_index)
-
-                page_md = metadata.copy()
-                page_md["axes"] = axes_wo_P
-                page_md["shape"] = page_data.shape
-
-                if zarr_store is None:
-                    images.append(np.asarray(page_data))
-                else:
-                    fname_base, _ = os.path.splitext(os.path.basename(fname))
-                    page_shape = page_data.shape
-                    chunks = compute_default_chunks(page_shape, axes_wo_P)
-                    if verbose:
-                        print(f"    Page {p}: using chunks {chunks}")
-
-                    if zarr_store == "memory":
-                        store = zarr.storage.MemoryStore()
-                        page_zarr = zarr.open(
-                            store=store,
-                            mode="w",
-                            shape=page_shape,
-                            dtype=page_data.dtype,
-                            chunks=chunks)
-                    else:
-                        zarr_cache_folder = os.path.join(os.path.dirname(fname), ".omio_cache")
-                        os.makedirs(zarr_cache_folder, exist_ok=True)
-                        page_name = f"{fname_base}_P{p}.zarr"
-                        page_path = os.path.join(zarr_cache_folder, page_name)
-                        if os.path.exists(page_path):
-                            shutil.rmtree(page_path)
-                        page_zarr = zarr.open(
-                            page_path,
-                            mode="w",
-                            shape=page_shape,
-                            dtype=page_data.dtype,
-                            chunks=chunks)
-
-                    # Copy page data
-                    _copy_to_zarr_in_xy_slices(page_data, page_zarr, desc=f"    Copying page {p} to Zarr")
-                    images.append(page_zarr)
-
-                # Post-hoc OME metadata checkup
-                page_md = OME_metadata_checkup(page_md, verbose=verbose)
-                metadatas.append(page_md)
-
-            # reorder to OME axes (batch):
-            memap_large_file = False
-            if zarr_store=="disk":
-                memap_large_file = True
-            images, metadatas = _batch_correct_for_OME_axes_order(images, metadatas, memap_large_file, verbose=verbose)
-
-            # for paginated inputs, always return lists, because splitting is the point (OMIO policy):
-            if verbose:
-                print(f"  Finished splitting paginated TIFF into {nP} pages.")
-                print("Reading paginated TIFF completed.")
-            return images, metadatas
+            if zarr_store == "disk" and isinstance(image, zarr.core.array.Array):
+                cache_info = _build_disk_cache_info(
+                    fname=fname,
+                    reader_name="tif",
+                    pixelunit=pixelunit,
+                    physicalsize_xyz_override=cache_override,
+                    cache_kind="primary",
+                )
+                _write_disk_cache_payload(image, metadata, cache_info, verbose=verbose)
+            return _split_paginated_tiff_stack(
+                image,
+                metadata,
+                fname=fname,
+                zarr_store=zarr_store,
+                verbose=verbose,
+            )
 
         # normal single-stack TIFF handling:
         metadata = _get_ome_image_sizes(image.shape, metadata)
@@ -2884,6 +3123,16 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
 
         # post-hoc OME metadata checkup and correction;
         metadata = OME_metadata_checkup(metadata, verbose=verbose)
+
+        if zarr_store == "disk" and isinstance(image, zarr.core.array.Array):
+            cache_info = _build_disk_cache_info(
+                fname=fname,
+                reader_name="tif",
+                pixelunit=pixelunit,
+                physicalsize_xyz_override=cache_override,
+                cache_kind="primary",
+            )
+            _write_disk_cache_payload(image, metadata, cache_info, verbose=verbose)
         
         if verbose:
             print("Finished reading TIFF.")
@@ -2895,7 +3144,7 @@ def read_tif(fname, physicalsize_xyz=None, pixelunit="micron",
 
 # CZI file reader:
 def read_czi(fname, physicalsize_xyz=None, pixelunit="micron", zarr_store=None, 
-             return_list=False, verbose=True):
+             return_list=False, reuse_disk_cache=False, verbose=True):
     """
     Read Zeiss CZI files into OMIO's canonical representation.
 
@@ -2932,10 +3181,17 @@ def read_czi(fname, physicalsize_xyz=None, pixelunit="micron", zarr_store=None,
         * "disk": return a Zarr array stored in the cache folder
           ``{parent}/.omio_cache/<basename>.zarr``
 
-        Existing on-disk stores at that location are replaced. Default is None.
+        Existing on-disk stores at that location are replaced unless
+        ``reuse_disk_cache=True`` and a validated OMIO cache is already present.
+        Default is None.
     return_list : bool, optional
         If True, return ``[image]`` and ``[metadata]`` for backward compatibility.
         Default is False.
+    reuse_disk_cache : bool, optional
+        If True and ``zarr_store="disk"``, OMIO first checks for a compatible
+        existing on-disk cache and reuses it instead of rebuilding the Zarr store.
+        Validation uses the persisted OMIO cache manifest stored inside the Zarr
+        attributes. Default is False.
     verbose : bool, optional
         If True, print diagnostic progress messages. Default is True.
 
@@ -2965,7 +3221,9 @@ def read_czi(fname, physicalsize_xyz=None, pixelunit="micron", zarr_store=None,
       and may permute existing axes. The updated axis declaration is stored in the
       returned metadata.
     * When `zarr_store="disk"`, the function may create and overwrite paths under
-      ``.omio_cache``.
+      ``.omio_cache``. OMIO metadata and cache validation info are persisted in the
+      Zarr attributes so the store can later be reopened without rereading the
+      original file.
     """
 
     # validate zarr_store parameter
@@ -2981,6 +3239,22 @@ def read_czi(fname, physicalsize_xyz=None, pixelunit="micron", zarr_store=None,
     else:
         physicalsize_xyz_ext = tuple(float(v) for v in physicalsize_xyz)
         set_input_pixelsize = True
+    cache_override = physicalsize_xyz_ext if set_input_pixelsize else None
+
+    if zarr_store == "disk" and reuse_disk_cache:
+        cached_image, cached_metadata = _try_reuse_disk_cache(
+            fname=fname,
+            reader_name="czi",
+            pixelunit=pixelunit,
+            physicalsize_xyz_override=cache_override,
+            verbose=verbose,
+        )
+        if cached_image is not None:
+            if verbose:
+                print("Finished reading CZI from reused disk cache.")
+            if return_list:
+                return [cached_image], [cached_metadata]
+            return cached_image, cached_metadata
 
     # read CZI into memory (no memory mapping possible)
     if verbose:
@@ -3083,10 +3357,8 @@ def read_czi(fname, physicalsize_xyz=None, pixelunit="micron", zarr_store=None,
             CZI_image = z
         elif zarr_store == "disk":
             # write into on-disk Zarr store in .omio_cache folder:
-            zarr_cache_folder = os.path.join(metadata["original_parentfolder"], ".omio_cache")
-            os.makedirs(zarr_cache_folder, exist_ok=True)
-
-            zarr_path = os.path.join(zarr_cache_folder, fname_base + ".zarr")
+            zarr_path = _get_disk_cache_path(fname)
+            os.makedirs(os.path.dirname(zarr_path), exist_ok=True)
             if os.path.exists(zarr_path):
                 shutil.rmtree(zarr_path)
 
@@ -3105,6 +3377,16 @@ def read_czi(fname, physicalsize_xyz=None, pixelunit="micron", zarr_store=None,
     # post-hoc OME metadata checkup and correction:
     metadata = OME_metadata_checkup(metadata, verbose=verbose)
 
+    if zarr_store == "disk" and isinstance(CZI_image, zarr.core.array.Array):
+        cache_info = _build_disk_cache_info(
+            fname=fname,
+            reader_name="czi",
+            pixelunit=pixelunit,
+            physicalsize_xyz_override=cache_override,
+            cache_kind="primary",
+        )
+        _write_disk_cache_payload(CZI_image, metadata, cache_info, verbose=verbose)
+
     if verbose:
         print("Finished reading CZI.")
 
@@ -3115,7 +3397,7 @@ def read_czi(fname, physicalsize_xyz=None, pixelunit="micron", zarr_store=None,
 
 # Thorlabs RAW file reader:
 def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
-                      zarr_store=None, return_list=False, verbose=True):
+                      zarr_store=None, return_list=False, reuse_disk_cache=False, verbose=True):
     """
     Read Thorlabs RAW files into OMIO's canonical representation.
 
@@ -3196,6 +3478,10 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
     return_list : bool, optional
         If True, return ``[image]`` and ``[metadata]`` for backward compatibility.
         Default is False.
+    reuse_disk_cache : bool, optional
+        If True and ``zarr_store="disk"``, OMIO first checks for a compatible
+        existing on-disk cache and reuses it instead of rebuilding the Zarr store.
+        Default is False.
     verbose : bool, optional
         If True, print diagnostic progress messages. Default is True.
 
@@ -3233,7 +3519,9 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
       dimensions or reorder axes. The updated axis string and shape are stored in
       the returned metadata.
     * When `zarr_store="disk"`, the function may create and overwrite paths under
-      ``.omio_cache``.
+      ``.omio_cache``. OMIO metadata and cache validation info are persisted in the
+      Zarr attributes so the store can later be reopened without rereading the
+      original file.
     """
 
     if zarr_store not in (None, "memory", "disk"):
@@ -3248,6 +3536,26 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
 
     if zarr_store in ("memory", "disk") and zarr is None:
         raise ImportError("zarr is required for zarr_store='memory' or 'disk'.")
+
+    cache_override = (
+        tuple(float(v) for v in physicalsize_xyz)
+        if physicalsize_xyz is not None else None
+    )
+
+    if zarr_store == "disk" and reuse_disk_cache:
+        cached_image, cached_metadata = _try_reuse_disk_cache(
+            fname=fname,
+            reader_name="raw",
+            pixelunit=pixelunit,
+            physicalsize_xyz_override=cache_override,
+            verbose=verbose,
+        )
+        if cached_image is not None:
+            if verbose:
+                print("Finished reading Thorlabs RAW file from reused disk cache.")
+            if return_list:
+                return [cached_image], [cached_metadata]
+            return cached_image, cached_metadata
 
     folder = os.path.dirname(fname)
     fname_base, fname_extension = os.path.splitext(os.path.basename(fname))
@@ -3570,9 +3878,8 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
         else:
             if verbose:
                 print("  Writing into on-disk Zarr store for memory mapping...")
-            zarr_cache_folder = os.path.join(folder, ".omio_cache")
-            os.makedirs(zarr_cache_folder, exist_ok=True)
-            zarr_cache_path = os.path.join(zarr_cache_folder, fname_base + ".zarr")
+            zarr_cache_path = _get_disk_cache_path(fname)
+            os.makedirs(os.path.dirname(zarr_cache_path), exist_ok=True)
             if os.path.exists(zarr_cache_path):
                 shutil.rmtree(zarr_cache_path)
 
@@ -3595,6 +3902,16 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
         image, metadata, memap_large_file=memap_large_file_flag, verbose=verbose)
 
     metadata = OME_metadata_checkup(metadata, verbose=verbose)
+
+    if zarr_store == "disk" and isinstance(image, zarr.core.array.Array):
+        cache_info = _build_disk_cache_info(
+            fname=fname,
+            reader_name="raw",
+            pixelunit=pixelunit,
+            physicalsize_xyz_override=cache_override,
+            cache_kind="primary",
+        )
+        _write_disk_cache_payload(image, metadata, cache_info, verbose=verbose)
 
     if verbose:
         print("Finished reading Thorlabs RAW file.")
@@ -6417,6 +6734,7 @@ def _dispatch_read_file(path: str,
                         return_list: bool,
                         physicalsize_xyz: Union[None, Any],
                         pixelunit: str,
+                        reuse_disk_cache: bool = False,
                         verbose: bool = True,
                         ) -> Tuple[Any, Dict[str, Any]]:
     """
@@ -6481,6 +6799,7 @@ def _dispatch_read_file(path: str,
             return_list=return_list,
             physicalsize_xyz=physicalsize_xyz,
             pixelunit=pixelunit,
+            reuse_disk_cache=reuse_disk_cache,
             verbose=verbose)
 
     if _lower_ext(lp) == ".czi":
@@ -6490,6 +6809,7 @@ def _dispatch_read_file(path: str,
             return_list=return_list,
             physicalsize_xyz=physicalsize_xyz,
             pixelunit=pixelunit,
+            reuse_disk_cache=reuse_disk_cache,
             verbose=verbose)
 
     if _lower_ext(lp) == ".raw":
@@ -6499,6 +6819,7 @@ def _dispatch_read_file(path: str,
             return_list=return_list,
             physicalsize_xyz=physicalsize_xyz,
             pixelunit=pixelunit,
+            reuse_disk_cache=reuse_disk_cache,
             verbose=verbose)
 
     raise ValueError(f"Unsupported file extension '{_lower_ext(lp)}' for path: {path}")
@@ -6604,6 +6925,7 @@ def _collapse_ome_multifile_series(files: list[str], verbose: bool = True) -> li
 # OMIO's main universal image reader:
 def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
          zarr_store: Union[None, str] = None,
+         reuse_disk_cache: bool = False,
          return_list: bool = False,
          recursive: bool = False,
          folder_stacks: bool = False,
@@ -6631,7 +6953,9 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     If `zarr_store` is set to "memory" or "disk", readers return a Zarr array instead of a
     NumPy array. For "disk", Zarr outputs are created in a hidden cache folder `.omio_cache`
     next to the source data. This is intended for large files where memory mapping and
-    chunked access are required downstream.
+    chunked access are required downstream. Disk-backed caches also persist OMIO metadata
+    and cache validation information directly in the Zarr store attributes so that later
+    calls may safely reuse an existing cache.
 
     Folder input behavior
     ---------------------
@@ -6672,6 +6996,12 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     zarr_store : {None, "memory", "disk"}, optional
         Controls whether images are returned as NumPy arrays (None) or as materialized Zarr
         arrays ("memory" or "disk"). Default is None.
+    reuse_disk_cache : bool, optional
+        If True and ``zarr_store="disk"``, OMIO first attempts to reuse a validated
+        existing on-disk cache instead of rebuilding it from the original source
+        file. Validation compares source path, file size, modification time,
+        OMIO version, relevant backend versions, and applicable read overrides.
+        Default is False.
     return_list : bool, optional
         If True, always return lists of images and metadata. If False, return a single image
         and metadata for single input cases, otherwise lists. Default is False.
@@ -6793,6 +7123,7 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
                     return_list=False,
                     physicalsize_xyz=physicalsize_xyz,
                     pixelunit=pixelunit,
+                    reuse_disk_cache=reuse_disk_cache,
                     verbose=verbose)
                 
                 # post-hoc OME metadata checkup and correction:
@@ -6844,6 +7175,7 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
                 zarr_store=zarr_store,
                 physicalsize_xyz=physicalsize_xyz,
                 pixelunit=pixelunit,
+                reuse_disk_cache=reuse_disk_cache,
                 return_list=False,
                 verbose=verbose)
             images.append(img)
@@ -6884,6 +7216,7 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
             return_list=False,
             physicalsize_xyz=physicalsize_xyz,
             pixelunit=pixelunit,
+            reuse_disk_cache=reuse_disk_cache,
             verbose=verbose)
         images.append(img)
         metadatas.append(md)
@@ -6899,6 +7232,7 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
 # OMIO'S universal converter (=imreader + imwrite):
 def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
          zarr_store: Union[None, str] = None,
+         reuse_disk_cache: bool = False,
          recursive: bool = False,
          folder_stacks: bool = False,
          merge_folder_stacks: bool = False,
@@ -6984,6 +7318,8 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     -------------------------------
     If `zarr_store` is "memory" or "disk", `imread(...)` may create Zarr arrays or
     materialize intermediate Zarr stores under a hidden `.omio_cache` directory.
+    If `reuse_disk_cache=True` together with ``zarr_store="disk"``, existing validated
+    OMIO disk caches may be reopened instead of rebuilt from the original source files.
     If `cleanup_cache=True`, this function removes the corresponding cache entries
     after writing. Cache cleanup is skipped when `zarr_store=None`.
 
@@ -6994,6 +7330,11 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     zarr_store : {None, "memory", "disk"}, optional
         Controls whether `imread(...)` returns NumPy arrays (None) or Zarr arrays
         ("memory" or "disk"). Default is None.
+    reuse_disk_cache : bool, optional
+        Forwarded to `imread(...)`. If True and ``zarr_store="disk"``, existing
+        validated OMIO disk caches may be reused instead of rebuilt. Those caches
+        persist OMIO metadata and cache manifests directly in the Zarr store.
+        Default is False.
     recursive : bool, optional
         If True and `fname` is a folder, search recursively for supported image files.
         Default is False.
@@ -7055,6 +7396,7 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     images, metadatas = imread(
         fname=fname,
         zarr_store=zarr_store,
+        reuse_disk_cache=reuse_disk_cache,
         recursive=recursive,
         folder_stacks=folder_stacks,
         merge_folder_stacks=merge_folder_stacks,
@@ -7169,6 +7511,7 @@ def bids_batch_convert(
     collapse_ome_multifile_series: bool = True,
     zeropadding: bool = True,
     zarr_store: str | None = None,
+    reuse_disk_cache: bool = False,
     recursive: bool = False,
     physicalsize_xyz=None,
     pixelunit: str = "micron",
@@ -7309,6 +7652,9 @@ def bids_batch_convert(
     -----------------------
     * ``zarr_store`` controls whether intermediate data are represented as NumPy in RAM
       or as Zarr arrays ("memory" or "disk") during reading and merging.
+    * If ``reuse_disk_cache=True`` together with ``zarr_store="disk"``, OMIO may reuse
+      an already existing validated disk cache instead of rebuilding it from the
+      original image file.
     * If ``cleanup_cache=True`` and ``zarr_store`` is not None, the function removes the
       per-input `.omio_cache` artifacts created during conversion once outputs are written.
 
@@ -7449,6 +7795,7 @@ def bids_batch_convert(
                     fnames_written = imconvert(
                         fname=exp_path,
                         zarr_store=zarr_store,
+                        reuse_disk_cache=reuse_disk_cache,
                         recursive=recursive,
                         folder_stacks=False,
                         merge_folder_stacks=False,
@@ -7506,6 +7853,7 @@ def bids_batch_convert(
                         fnames_written = imconvert(
                             fname=tf,
                             zarr_store=zarr_store,
+                            reuse_disk_cache=reuse_disk_cache,
                             recursive=recursive,
                             folder_stacks=False,  # ⟵ important: we are already in a tagfolder!
                             merge_folder_stacks=False,

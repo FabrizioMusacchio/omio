@@ -10,6 +10,34 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
+## 🚀 OMIO v0.2.2
+
+June 12, 2026
+
+This maintenance release adds validated reuse of OMIO's on-disk Zarr caches and stores enough OMIO metadata inside each cache to reopen compatible datasets without rereading the original microscopy file.
+
+### 📃 Changes
+#### ✨ Added
+* Added opt-in disk-cache reuse for `imread(..., zarr_store="disk", reuse_disk_cache=True)`.
+* Compatible existing `.omio_cache/<basename>.zarr` stores can now be reopened directly instead of being rebuilt from the source file.
+* Added persisted OMIO cache manifests for disk-backed TIFF, CZI, and Thorlabs RAW reads.
+* Added persisted OMIO metadata payloads for disk-backed TIFF, CZI, and Thorlabs RAW reads, enabling cache reuse without reopening the original source image for metadata extraction.
+
+#### 🧩 Changed
+* OMIO now stores disk-cache metadata and cache validation info directly in Zarr attributes, which are persisted in the store's `zarr.json` under the current Zarr v3 layout.
+* Disk-cache reuse is validated against source path, file size, modification time, OMIO version, reader/backend identity, pixel unit, and any explicit physical-size overrides before reuse is allowed.
+* If a disk cache is missing OMIO metadata, missing cache info, stale, or otherwise incompatible, OMIO now falls back automatically to a full rebuild and refreshes the cache in place.
+
+#### 🧪 Testing and robustness
+* Added regression tests covering persisted disk-cache metadata payloads for TIFF-backed Zarr caches.
+* Added regression tests verifying that TIFF, CZI, and Thorlabs RAW readers can reopen compatible disk caches without rereading the original source files.
+* Added regression tests covering fallback behavior when a stale or incomplete disk cache is encountered.
+
+#### 📚 Documentation and citation
+* OMIO is now described in a dedicated preprint that can be cited in academic work:
+  * DOI: [10.64898/2026.06.09.731118](https://doi.org/10.64898/2026.06.09.731118)
+
+
 ## 🚀 OMIO v0.2.1
 
 May 13, 2026

@@ -39,6 +39,7 @@ date: December 2025
 """
 # %% IMPORTS
 import omio as om
+import os
 import pprint
 # %% HELLO WORLD
 """ 
@@ -515,7 +516,33 @@ b) automatic axis reordering based on OME semantics, and c) DASK support for out
 parallel processing.
 """
 
-# this file is 1.1 GB 3D stacks with multiple channels:
+# %% REUSE AN EXISTING ON-DISK OMIO CACHE
+"""
+If you repeatedly open the same large file with `zarr_store="disk"`, OMIO can reuse an
+already existing `.omio_cache/<basename>.zarr` store instead of rebuilding it from the
+original image each time. This is useful for iterative interactive work on large files.
+"""
+
+fname = "../example_data/tif_files_from_3P_paper/Supplementary_Video_4.tif"
+cache_store = os.path.join(os.path.dirname(fname), ".omio_cache",
+                           os.path.splitext(os.path.basename(fname))[0] + ".zarr",)
+
+# clean-up any existing cache store for this file to start fresh:
+om.cleanup_omio_cache(fname, full_cleanup=False)
+
+# first call: creates the disk-backed Zarr cache and stores OMIO metadata/cache info in it.
+image_cache_1, metadata_cache_1 = om.imread(fname, zarr_store="disk")
+print(f"First read shape: {image_cache_1.shape}, axes: {metadata_cache_1.get('axes', 'N/A')}")
+print(f"Cache store created: {os.path.exists(cache_store)} at {cache_store}")
+print(f"Stored cache info keys: {list(image_cache_1.attrs['omio_cache_info'].keys())}")
+
+# second call: reuses the existing `.omio_cache/...zarr` store instead of rebuilding it.
+image_cache_2, metadata_cache_2 = om.imread(fname, zarr_store="disk", reuse_disk_cache=True)
+print(f"Second read shape: {image_cache_2.shape}, axes: {metadata_cache_2.get('axes', 'N/A')}")
+print(f"Reused cache for source: {image_cache_2.attrs['omio_cache_info']['source_path']}")
+
+
+# ANOTHER EXAMPLE: this file is 1.1 GB 3D stacks with multiple channels:
 fname = "../example_data/tif_files_from_3P_paper/Supplementary_Video_4.tif"
 """ 
 File name: Supplementary Video 4
@@ -525,7 +552,7 @@ CreERuRosa25_tdTomato transgenic mouse.
 """
 
 # let's first memory-map the image on disk:
-image_large, metadata_large = om.imread(fname, zarr_store="disk")
+image_large, metadata_large = om.imread(fname, zarr_store="disk", reuse_disk_cache=True)
 
 """ 
 This stack has stored an erroneous PhysicalSizeZ in its ImageJ metadata, which is set to
@@ -535,7 +562,7 @@ correctly scale the Z axis upon viewing:
 """
 metadata_large["PhysicalSizeZ"] = 5  # in microns
 
-# Now open the large image in Napari. First, we do it w/o DASK (`zarr_mode="zarr_nodask"`):
+# now open the large image in Napari. First, we do it w/o DASK (`zarr_mode="zarr_nodask"`):
 om.open_in_napari(image_large, metadata_large, fname, zarr_mode="zarr_nodask")
 
 """
@@ -561,9 +588,6 @@ napari_viewer, napari_layers, napari_datas, napari_axes = om.open_in_napari(imag
                                                                             returns=True)
 
 om.cleanup_omio_cache(fname, full_cleanup=True)
-
-
-
 # %% ---------------------------------------------------------
 # %% IMREAD'S FOLDER READING ADN MERGING CAPABILITY
 """ 
@@ -614,7 +638,6 @@ images_merged, metadata_merged = om.imread(fname_folder,
                                            merge_along_axis="T",
                                            zeropadding=False)
 print(f"type of merged images: {type(images_merged)},\ntype of merged metadata: {type(metadata_merged)}")
-
 # %% FOLDER-STACKS READING AND MERGING
 """
 OMIO also supports reading of "tagged" folders or folder stacks, where sub-folders are 
@@ -689,8 +712,6 @@ output_fnames_folder_stacks = om.imconvert(fname_folder_stacks,
                                            return_fnames=True)
 for ofname in output_fnames_folder_stacks:
     print(f"Converted file name from folder stacks: {ofname}")
-    
-
 # %% ---------------------------------------------------------
 # %% OMIO'S BATCH CONVERSION FUNCTION
 """ 
@@ -779,7 +800,6 @@ fname_converted = "../example_data/tif_dummy_data/BIDS_project_example/ID0001/TP
 image, metadata = om.imread(fname_converted)
 print(f"Multi-file OME-TIFF image shape: {image.shape} with axes {metadata.get('axes', 'N/A')}")
 om.open_in_napari(image, metadata, fname_converted)
-
 # %% CREATING EMPTY, OME-COMPLIANT IMAGE ARRAYS AND METADATA
 """
 OMIO provides a utility functions called `create_empty_image`, `create_empty_metadata`, and
@@ -787,7 +807,6 @@ OMIO provides a utility functions called `create_empty_image`, `create_empty_met
 based on user-defined specifications.
 """
 import numpy as np
-import os
 my_image, my_metadata = om.create_empty_image(return_metadata=True)
 print(f"Created empty image with shape: {my_image.shape}, dtype {my_image.dtype} and axes {my_metadata.get('axes', 'N/A')}.")
 
@@ -845,7 +864,5 @@ print(f"Updated cropped image metadata axes: {my_cropped_metadata.get('axes', 'N
 om.imwrite(os.path.join(pathname_save, "my_cropped_image.ome.tif"), my_cropped_image, my_cropped_metadata)
 read_my_cropped_image, read_my_cropped_metadata = om.imread(os.path.join(pathname_save, "my_cropped_image.ome.tif"))
 om.open_in_napari(read_my_cropped_image, read_my_cropped_metadata, os.path.join(pathname_save, "my_cropped_image.ome.tif"))
-
 # %% END
-
 
