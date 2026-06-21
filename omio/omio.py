@@ -3413,8 +3413,7 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
     copying is performed slice-wise over the last two spatial dimensions to limit
     peak RAM usage.
     
-    YAML fallback in case of missing XML
-    --------------------------------------
+    **YAML fallback in case of missing XML:**
     In case no XML metadata file is found, the function looks for a YAML file
     in the same folder. If found, it extracts the necessary dimensions and pixel
     size information from the YAML keys ``T``, ``Z``, ``C``, ``Y``, ``X``, ``bits``,
@@ -6955,8 +6954,7 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     and cache validation information directly in the Zarr store attributes so that later
     calls may safely reuse an existing cache.
 
-    Folder input behavior
-    ---------------------
+    **Folder input behavior:**
     If `fname` resolves to a folder, OMIO lists all supported image files inside the folder
     (optionally recursive) and reads them in sorted order.
 
@@ -6966,8 +6964,7 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     tag in the parent directory, reads the first image file in each of these folders, and
     returns either the list of stacks or a merged stack.
 
-    Merge behavior
-    --------------
+    **Merge behavior:**
     Two merge modes are supported.
 
     * `merge_multiple_files_in_folder=True` merges all images found in a folder by
@@ -7256,8 +7253,7 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     axes TZCYX plus standardized metadata), and writes one OME TIFF per resulting image
     stack.
 
-    Input path semantics (inherited from `imread(...)`)
-    ---------------------------------------------------
+    **Input path semantics (inherited from `imread(...)`):**
     Input handling and optional merges follow the same semantics as `imread(...)`:
     folder reading can be recursive, tagged folder stacks can be interpreted as a sequence
     of co folders, and merge operations can concatenate multiple stacks along a chosen OME
@@ -7292,8 +7288,7 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
           All image files found in the folder are concatenated along
           ``merge_along_axis`` and written as a single merged OME TIFF.
 
-    Merge behavior
-    --------------
+    **Merge behavior:**
     Merge operations follow the same validation and padding rules as in `imread(...)`:
     
     * Allowed merge axes are "T", "Z", and "C".
@@ -7301,8 +7296,7 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     * If `zeropadding=True`, non merge axes are padded with zeros to the maximum size
       across inputs before concatenation.
 
-    Output behavior
-    ---------------
+    **Output behavior:**
     The output location and naming follow `imwrite(...)`:
     
     * OME TIFFs are written next to the input file or inside the input folder.
@@ -7313,8 +7307,7 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     * If `overwrite=False`, existing files are not replaced and collision safe names
       are generated.
 
-    Zarr handling and cache cleanup
-    -------------------------------
+    **Zarr handling and cache cleanup:**
     If `zarr_store` is "memory" or "disk", `imread(...)` may create Zarr arrays or
     materialize intermediate Zarr stores under a hidden `.omio_cache` directory.
     If `reuse_disk_cache=True` together with ``zarr_store="disk"``, existing validated
@@ -7529,8 +7522,7 @@ def bids_batch_convert(
     inside experiment folders, or conversion and optional merging of tagged
     subfolders (folder-stacks) inside experiment folders.
     
-    Abstract expected folder scheme
-    -------------------------------
+    **Abstract expected folder scheme:**
     The converter expects a project root that contains subject folders, which in turn
     contain experiment folders. Depending on whether `tagfolder` is provided, an
     experiment folder either contains image files directly, or contains multiple
@@ -7571,8 +7563,7 @@ def bids_batch_convert(
       tagfolders are processed.
     
 
-    Folder discovery and selection
-    ------------------------------
+    **Folder discovery and selection:**
     The input ``fname`` must be a directory and is treated as the project root.
 
     Subject detection:
@@ -7590,8 +7581,7 @@ def bids_batch_convert(
       * ``"exact"``: folder name equals ``exp``
       * ``"regex"``: ``re.match(exp, foldername)`` succeeds
 
-    Conversion behavior inside each experiment folder
-    -------------------------------------------------
+    **Conversion behavior inside each experiment folder:**
     Two mutually exclusive modes exist depending on `tagfolder`.
 
     Mode A: tagfolder is None (direct file conversion):
@@ -7615,15 +7605,13 @@ def bids_batch_convert(
       collision-free when provenance-driven naming is used, a synthetic provenance
       name is injected into ``metadata["Annotations"]["original_filename"]``.
 
-    Input path semantics
-    --------------------
+    **Input path semantics:**
     Only directory input is accepted:
     
     * ``fname`` must be an existing directory and is treated as the project root.
     * All outputs are written within the experiment scope determined by traversal.
 
-    Output placement and naming
-    ---------------------------
+    **Output placement and naming:**
     Output placement follows OMIO’s writer conventions via ``imconvert()`` and
     ``imwrite()``:
 
@@ -7638,8 +7626,7 @@ def bids_batch_convert(
     * If ``overwrite=False``, name collisions are resolved by appending an incrementing
       suffix to the output filename.
 
-    Merging semantics
-    -----------------
+    **Merging semantics:**
     * ``merge_along_axis`` must be one of {"T","Z","C"}.
     * In merge operations, the merge axis segments are concatenated in discovery order.
     * If ``zeropadding=True``, non-merge axes may differ between inputs and will be
@@ -7647,8 +7634,7 @@ def bids_batch_convert(
       
       If ``zeropadding=False``, non-merge axes must match exactly or the merge is aborted.
 
-    Zarr and cache handling
-    -----------------------
+    **Zarr and cache handling:**
     * ``zarr_store`` controls whether intermediate data are represented as NumPy in RAM
       or as Zarr arrays ("memory" or "disk") during reading and merging.
     * If ``reuse_disk_cache=True`` together with ``zarr_store="disk"``, OMIO may reuse
