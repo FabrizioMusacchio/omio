@@ -3487,13 +3487,11 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
 
     Returns
     -------
-    image : np.ndarray or zarr.core.array.Array or None
-        Image data in canonical OME axis order TZCYX, or None if dimensions cannot
-        be inferred from XML or YAML.
-    metadata : dict or None
-        Metadata dictionary aligned with the returned image, or None if metadata is
-        unavailable. The dictionary includes an ``Annotations`` block for auxiliary
-        fields when reading succeeds.
+    tuple
+        Returns ``(image, metadata)`` with image data in canonical OME axis order
+        TZCYX and the aligned metadata dictionary. If `return_list=True`, returns
+        ``([image], [metadata])`` for backward compatibility. If dimensions cannot
+        be inferred from XML or YAML, returns ``(None, None)`` or ``([None], [None])``.
 
     Raises
     ------
@@ -7035,12 +7033,13 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
 
     Returns
     -------
-    image, metadata : (Any, dict) or (list[Any], list[dict])
-        For single non folder inputs and `return_list=False`, returns one image and one
-        metadata dict. For multi file inputs, folder reads, or `return_list=True`, returns
-        lists. Merge modes return a single merged image and merged metadata (or lists if
-        `return_list=True`). If a requested merge fails validation, returns None results
-        according to the calling branch.
+    tuple
+        Returns ``(image, metadata)`` for single non-folder inputs when
+        `return_list=False`. For multi-file inputs, folder reads, or
+        `return_list=True`, returns ``(images, metadatas)`` as lists. Merge modes
+        return a single merged image and merged metadata, or lists if
+        `return_list=True`. If a requested merge fails validation, None results may
+        be returned according to the calling branch.
 
     Raises
     ------
@@ -7375,9 +7374,9 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
 
     Returns
     -------
-    None or list[str]
-        If `return_fnames=True`, returns a list of output OME TIFF paths.
-        Otherwise returns None.
+    list[str] or None
+        If `return_fnames` is True, returns a list of output OME-TIFF paths in the
+        order processed. Otherwise returns None.
 
     Raises
     ------
@@ -7385,8 +7384,8 @@ def imconvert(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
         If invalid merge options are provided.
     FileNotFoundError
         If an input file does not exist.
-    Other exceptions
-        Reader and writer errors may propagate during I O or metadata handling.
+    Exception
+        Reader and writer errors may propagate during I/O or metadata handling.
     """
 
 
@@ -7708,9 +7707,15 @@ def bids_batch_convert(
     Returns
     -------
     list[str] or None
-        If `return_fnames=True`, returns a list of written OME-TIFF file paths.
+        If `return_fnames` is True, returns a list of written OME-TIFF file paths.
         Otherwise returns None. The list may be empty if nothing matched or all
         conversions failed.
+
+    Raises
+    ------
+    ValueError
+        If `fname` is not an existing directory, or if `merge_along_axis` is not one
+        of {"T", "Z", "C"}.
     """
     if fname is None or not os.path.isdir(str(fname)):
         raise ValueError(f"bids_batch_convert: fname must be an existing directory. Got: {fname!r}\n"
