@@ -235,12 +235,12 @@ On Zenodo, you can select other citation formats as needed as well as a DOI
 for dedicated OMIO software versions.
 
 
-Acknowledgements
-----------------
 
-OMIO was developed to support real-world microscopy workflows where data 
-heterogeneity, scale, and metadata inconsistencies are the norm rather 
-than the exception.
+.. insert a horizontal line here -- IGNORE --
+.. raw:: html
+
+   <hr>
+
 
 For questions, suggestions or bug reports, please refer to the
 `GitHub issue tracker <https://github.com/FabrizioMusacchio/OMIO/issues>`_ of 
