@@ -41,6 +41,8 @@ date: December 2025
 import omio as om
 import os
 import pprint
+
+import numpy as np
 # %% HELLO WORLD
 """ 
 OMIO has a simple hello world function to verify that the installation was successful. The
@@ -821,7 +823,7 @@ OMIO provides a utility functions called `create_empty_image`, `create_empty_met
 `update_metadata_from_image` to create empty, OME-compliant image arrays and metadata dictionaries
 based on user-defined specifications.
 """
-import numpy as np
+
 my_image, my_metadata = om.create_empty_image(return_metadata=True)
 print(f"Created empty image with shape: {my_image.shape}, dtype {my_image.dtype} and axes {my_metadata.get('axes', 'N/A')}.")
 
@@ -863,6 +865,22 @@ om.imwrite(os.path.join(pathname_save, "my_empty_image_filled.ome.tif"), my_imag
 read_my_image, read_my_metadata = om.imread(os.path.join(pathname_save, "my_empty_image_filled.ome.tif"))
 om.open_in_napari(read_my_image, read_my_metadata)
 
+
+""" 
+When changing the image shape, e.g., by cropping or padding, 
+"""
+my_cropped_image = my_image[:, 2:8, :, 100:400, 100:400]  # crop Z and spatial dimensions
+print(f"Cropped image shape: {my_cropped_image.shape}")
+""" 
+you need to update the associated metadata dictionary accordingly. You can do so
+by manually updating the relevant metadata entries, or by using OMIO's utility function
+`update_metadata_from_image`:
+"""
+my_cropped_metadata = om.update_metadata_from_image(my_metadata, my_cropped_image)
+print(f"Updated cropped image metadata axes: {my_cropped_metadata.get('axes', 'N/A')} with shape: {my_cropped_image.shape}.")
+om.imwrite(os.path.join(pathname_save, "my_cropped_image.ome.tif"), my_cropped_image, my_cropped_metadata)
+read_my_cropped_image, read_my_cropped_metadata = om.imread(os.path.join(pathname_save, "my_cropped_image.ome.tif"))
+om.open_in_napari(read_my_cropped_image, read_my_cropped_metadata)
 # %% CREATE AN EMPTY IMAGE DIRECTLY AS AN ON-DISK ZARR ARRAY
 """
 For larger synthetic or preallocated datasets, you can create the empty image directly
@@ -889,23 +907,12 @@ for t in range(my_zarr_image.shape[0]):
         for c in range(my_zarr_image.shape[2]):
             my_zarr_image[t, z, c, :, :] = t * 100 + z * 10 + c
 
-# When you no longer need the on-disk Zarr store, remove the cache via the metadata path:
+# When you no longer need the on-disk Zarr store, e.g., after storing the processed array 
+# as an OME-TIFF file using imwrite, 
+pathname_save = "../example_data/custom_created_images/"
+os.makedirs(pathname_save, exist_ok=True)
+om.imwrite(os.path.join(pathname_save, "my_empty_image_zarr_filled.ome.tif"), my_zarr_image, my_zarr_metadata)
+om.open_in_napari(my_zarr_image, my_zarr_metadata)
+# remove the cache via the metadata path:
 om.cleanup_omio_cache(my_zarr_metadata["omio_cache_folder"], full_cleanup=True)
-
-""" 
-When changing the image shape, e.g., by cropping or padding, 
-"""
-my_cropped_image = my_image[:, 2:8, :, 100:400, 100:400]  # crop Z and spatial dimensions
-print(f"Cropped image shape: {my_cropped_image.shape}")
-
-""" 
-you need to update the associated metadata dictionary accordingly. You can do so
-by manually updating the relevant metadata entries, or by using OMIO's utility function
-`update_metadata_from_image`:
-"""
-my_cropped_metadata = om.update_metadata_from_image(my_metadata, my_cropped_image)
-print(f"Updated cropped image metadata axes: {my_cropped_metadata.get('axes', 'N/A')} with shape: {my_cropped_image.shape}.")
-om.imwrite(os.path.join(pathname_save, "my_cropped_image.ome.tif"), my_cropped_image, my_cropped_metadata)
-read_my_cropped_image, read_my_cropped_metadata = om.imread(os.path.join(pathname_save, "my_cropped_image.ome.tif"))
-om.open_in_napari(read_my_cropped_image, read_my_cropped_metadata)
 # %% END
