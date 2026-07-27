@@ -1,4 +1,4 @@
-Batch Conversion over a BIDS-like Tree
+Batch conversion over a BIDS-like tree
 ========================================
 
 The examples below assume the following imports:
@@ -8,7 +8,7 @@ The examples below assume the following imports:
    import omio as om
    import pprint
 
-OMIO’s Batch Conversion Function
+OMIO’s batch conversion function
 -----------------------------------
 
 OMIO provides a convenience function called ``bids_batch_convert`` to convert entire

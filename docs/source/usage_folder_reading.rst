@@ -1,4 +1,4 @@
-Folder Reading and Semantic Merging
+Folder reading and semantic merging
 =====================================
 
 The examples below assume the following imports:
@@ -8,7 +8,7 @@ The examples below assume the following imports:
    import omio as om
    import pprint
 
-Imread’s Folder Reading and Merging Capability
+Imread’s folder reading and merging capability
 -------------------------------------------------
 
 ``imread``’s ``fname`` argument is not restricted to single file names. You can also provide
@@ -96,7 +96,7 @@ In case ``zeropadding`` is set to ``False``, ``imread`` will not merge the image
     type of merged metadata: <class 'NoneType'>
 
 
-Folder Stacks Reading and Merging
+Folder stacks reading and merging
 ------------------------------------
 
 OMIO also supports reading of tagged folders or folder stacks, where sub-folders are

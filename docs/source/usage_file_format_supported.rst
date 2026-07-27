@@ -1,5 +1,5 @@
-Supported File Formats
-==========================================================
+Supported file formats
+==========================
 
 This section demonstrates how OMIO reads different microscopy file formats via the
 ``imread`` interface. All formats are normalized to OMIO’s canonical OME-compliant
@@ -13,7 +13,7 @@ The examples below assume the following imports:
    import pprint
 
 
-Reading LSM Files
+Reading LSM files
 -------------------
 
 ``imread`` and its associated reading function ``read_tif`` are based on the
@@ -33,7 +33,7 @@ LSM files directly with ``imread`` as well.
    :target: _static/figures/open_032113-18_in_napari.jpg
    :alt: LSM sample file opened in napari
 
-Reading CZI Files
+Reading CZI files
 -------------------
 
 OMIO also supports reading of Zeiss CZI files via the ``imread`` function, which internally
@@ -52,7 +52,7 @@ calls the ``read_czi`` function based on the ``czifile`` library.
    :alt: CZI sample file opened in napari
 
 
-Reading Thorlabs RAW Files
+Reading Thorlabs RAW files
 ----------------------------
 
 OMIO supports reading of Thorlabs RAW files via the ``imread`` function, which internally

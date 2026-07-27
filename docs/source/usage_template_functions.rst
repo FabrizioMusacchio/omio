@@ -1,7 +1,7 @@
-Creating Empty Images and Metadata
+Creating empty images and metadata
 ===================================
 
-Creating Empty, OME-Compliant Image Arrays and Metadata
+Creating empty, OME-compliant image arrays and metadata
 ----------------------------------------------------------
 
 OMIO provides utility functions called ``create_empty_image``, ``create_empty_metadata``,
@@ -139,7 +139,7 @@ by manually updating the relevant metadata entries, or by using OMIO’s utility
    :target: _static/figures/open_custom_created_images_cropped_in_napari.jpg
    :alt: Custom created and cropped image opened in napari
 
-Creating Empty Images as On-Disk Zarr Arrays
+Creating empty images as on-disk Zarr arrays
 --------------------------------------------
 
 For larger synthetic or preallocated datasets, ``create_empty_image`` can create the

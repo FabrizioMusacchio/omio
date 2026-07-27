@@ -1,5 +1,5 @@
-Large File Handling and Out of Core Workflows
-==========================================================
+Large file handling and out of core workflows
+===============================================
 
 
 OMIO provides explicit support for working with large image data that do not fit into
@@ -13,7 +13,7 @@ The examples below assume the following imports:
    import omio as om
    import pprint
 
-Read Large Files Lazily With Zarr Backend
+Read large files lazily with Zarr backend
 -------------------------------------------
 
 OMIO supports reading large image files that do not fit into memory by Zarr-backed lazy
@@ -85,7 +85,7 @@ OMIO will reuse the existing napari viewer instance to avoid opening multiple wi
 In practice, any new image opened with ``om.open_in_napari`` will be added as a new layer
 to the existing napari viewer.
 
-Reuse an Existing On-Disk OMIO Cache
+Reuse an existing on-disk OMIO cache
 ------------------------------------
 
 If you repeatedly open the same large file with ``zarr_store="disk"``, OMIO can reuse
@@ -143,7 +143,7 @@ This command cleans up only the temporary Zarr store associated with the given
    om.cleanup_omio_cache(fname, full_cleanup=True)
 
 
-Efficiently View Large Images in Napari With OMIO’s DASK Support
+Efficiently view large images in Napari with OMIO’s DASK support
 ------------------------------------------------------------------
 
 To efficiently view large images in napari without loading the entire dataset into

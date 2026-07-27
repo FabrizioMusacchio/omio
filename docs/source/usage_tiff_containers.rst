@@ -1,4 +1,4 @@
-TIFF Container Policies and Special Layouts
+TIFF container policies and special layouts
 =============================================
 
 This section describes how OMIO handles more complex TIFF and LSM container layouts,
@@ -6,7 +6,7 @@ including multi-series files, paginated stacks, and multi-file OME-TIFF series.
 OMIO follows strict and explicit policies to avoid ambiguous interpretations.
 
 
-Reading Multi-Series TIFF Stacks
+Reading multi-series TIFF stacks
 -----------------------------------
 
 OMIO’s ``imread`` function also supports reading of multi-series TIFF and LSM stacks,
@@ -256,7 +256,7 @@ series themselves (e.g., by using as ImageJ/Fiji and store each series in its ow
 single-series TIFF file).
 
 
-Reading Paginated TIFF Stacks
+Reading paginated TIFF stacks
 --------------------------------
 
 OMIO’s ``imread`` function also supports reading of paginated LSM stacks that contain
@@ -299,7 +299,7 @@ This can be useful for consistent handling of paginated stacks in batch processi
 scenarios.
 
 
-Reading Multi-File OME-TIFF Stacks
+Reading multi-file OME-TIFF stacks
 ------------------------------------
 
 A multi-file OME-TIFF series consists of multiple TIFF files, each representing a

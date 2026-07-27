@@ -1,11 +1,11 @@
-Core Workflow: Read, Inspect, View, Write
+Core workflow: Read, inspect, view, write
 ==========================================================
 
 This section introduces the core OMIO workflow using single image files. It covers
 reading image data, inspecting and modifying metadata, visualizing images in Napari,
 and writing OME-TIFF output files.
 
-Hello World
+Hello world
 -----------
 
 OMIO has a simple ``hello_world()`` function to verify that the installation 
@@ -28,7 +28,7 @@ If you see this message, OMIO is correctly installed and ready to use.
 Note that the version number may vary depending on the installed version.
 
 
-Single File Reading and Metadata Inspection
+Single file reading and metadata inspection
 --------------------------------------------
 
 To open a single file such as a TIFF file, use the ``imread`` function. This function
@@ -202,7 +202,7 @@ the metadata dictionary to be fully OME-compliant by moving any non-OME entries 
    'shape': (1, 35, 3, 328, 340)}
 
 
-Opening Images in Napari and Metadata Modification
+Opening images in Napari and metadata modification
 ----------------------------------------------------
 
 OMIO comes with built-in support to open images directly in Napari for interactive
@@ -224,6 +224,15 @@ You can still override the display name manually:
 
    om.open_in_napari(image, metadata, image_name="my_display_name")
 
+You can also specify custom layer names for each channel in the image:
+
+.. code-block:: python
+
+   om.open_in_napari(image, metadata, 
+                     image_name="my image",
+                     layer_names=["channel 0", "channel 1", "channel 2"],
+                     blending="additive")
+
 For demonstration purposes, we change the ``PhysicalSizeZ`` metadata entry to an
 incorrect value and re-open the image in Napari to see that Napari correctly rescales
 the Z axis based on the provided metadata:
@@ -243,7 +252,7 @@ OMIO function call. For example:
    om.open_in_napari(image, metadata, verbose=False)
 
 
-Ensured OME Compliance upon Reading
+Ensured OME compliance upon reading
 -------------------------------------
 
 OMIO ensures OME compliance of the read image and metadata upon reading. This applies
@@ -470,7 +479,7 @@ Output:
    'shape': (5, 10, 2, 20, 100)}
 
 
-Ensured OME Compliance upon Writing
+Ensured OME compliance upon writing
 ------------------------------------
 
 OMIO’s writing function ``imwrite`` also ensures OME compliance of the written image and
@@ -557,7 +566,7 @@ library. Using the Bio-Formats Importer correctly interprets the physical unit.
    :target: _static/figures/open_ometiff_in_FIJI_BioFormats_metadata.jpg
    :alt: Metadata shown in Bio-Formats Importer in ImageJ/Fiji
 
-The imconvert Convenience Function
+The imconvert convenience function
 ------------------------------------
 
 OMIO also provides a convenience function called ``imconvert`` that combines reading and

@@ -1,4 +1,4 @@
-Example Data Sets
+Example data sets
 =====================
 
 In order to follow along with the examples provided in this documentation,

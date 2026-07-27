@@ -19,7 +19,7 @@ The project is under active development. While the core concepts are stable, the
 public API and feature set may evolve over time.
 
 
-Motivation and Problem Statement
+Motivation and problem statement
 --------------------------------
 
 Modern microscopy workflows face a recurring and largely unsolved problem. While
@@ -43,30 +43,30 @@ OMIO addresses this gap by acting as a semantic I/O layer rather than a simple
 format converter.
 
 
-Design Principles
+Design principles
 -----------------
 
-Explicit Axis Semantics
+Explicit axis semantics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 All image data handled by OMIO carry an explicit axis string, with the default
 internal convention being ``TZCYX``. Axis order is never implicit and never guessed
 silently.
 
-OME Aware, but Not OME Exclusive
+OME aware, but not OME exclusive
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 OME semantics serve as the internal reference model for OMIO, but the library is
 not restricted to OME TIFF input or output. OME TIFF is treated as one well defined
 sink among several possible representations.
 
-Policy Driven Behavior
+Policy driven behavior
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Operations such as merging, padding, and metadata reconciliation are governed by
 explicit and documented policies rather than hidden heuristics.
 
-Memory Aware by Construction
+Memory aware by construction
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Large datasets can be processed via Zarr and Dask without loading entire volumes
@@ -74,17 +74,17 @@ into memory. Chunk aligned copying, cache based workflows, and memory mapped
 access are first class concepts and allow both out of core processing and
 interactive visualization in napari.
 
-Separation of Concerns
+Separation of concerns
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Reading, merging, visualization, and writing are treated as distinct stages that
 can be composed flexibly but are not entangled.
 
 
-Core Functionality
+Core functionality
 ------------------
 
-Unified Image Reading
+Unified image reading
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 OMIO provides a single entry point for reading microscopy image data from files or
@@ -97,7 +97,7 @@ All readers return:
 * a normalized metadata dictionary
 * an explicit axis specification
 
-Metadata Normalization and Enforcement
+Metadata normalization and enforcement
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Metadata are normalized into a structured dictionary that includes axis
@@ -106,7 +106,7 @@ resolution, units, and structured provenance stored via OME MapAnnotations.
 
 Non OME metadata are preserved and stored explicitly rather than discarded.
 
-Controlled Merging along Semantic Axes
+Controlled merging along semantic axes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 OMIO supports concatenation and merging along semantic axes such as time, depth,
@@ -114,7 +114,7 @@ and channel. Merge behavior is configurable and can enforce strict compatibility
 or allow zero padding of non merge axes to maximal extents. All merges propagate
 provenance information into metadata annotations.
 
-Folder Based and BIDS Like Workflows
+Folder based and BIDS like workflows
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 OMIO supports structured folder traversal for large projects, including reading
@@ -122,14 +122,14 @@ all files in a folder, merging multiple files within a folder, merging structure
 folder stacks, and batch processing of BIDS like directory hierarchies. These
 workflows reflect how microscopy data are commonly organized in practice.
 
-OME TIFF Export
+OME TIFF export
 ^^^^^^^^^^^^^^^^^^^^^
 
 OMIO can write OME TIFF files with correct axis order, physical and temporal
 metadata, optional BigTIFF handling for large datasets, and embedded
 MapAnnotations for provenance and custom metadata.
 
-Napari Integration
+Napari integration
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 OMIO integrates directly with napari, supporting NumPy based visualization for
@@ -137,14 +137,14 @@ small data, Zarr backed visualization for large data, and correct spatial scalin
 and channel handling. Axis squeezing and cache generation are performed explicitly
 and transparently.
 
-Creating Metadata and Image Templates
+Creating metadata and image templates
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 OMIO provides utility functions to create empty metadata and image templates
 that can be populated programmatically or used as blueprints for new datasets.
 
 
-Typical Usage Patterns
+Typical usage patterns
 ----------------------
 
 OMIO exposes a small set of core functions that cover most workflows:
@@ -160,7 +160,7 @@ These functions are designed to be composable and to keep I/O concerns separate
 from downstream analysis logic.
 
 
-Scope and Non Goals
+Scope and non-goals
 -------------------
 
 OMIO intentionally does not perform image processing or analysis, does not infer
@@ -177,7 +177,7 @@ Installation
 Please refer to the :doc:`installation instructions <installation>`.
 
 
-Further Reading
+Further reading
 ---------------
 
 Detailed usage examples, API documentation, and contribution guidelines are
