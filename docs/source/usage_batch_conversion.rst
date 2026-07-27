@@ -124,7 +124,7 @@ one level up as done before with ``imconvert``.
    print(f"Multi-file OME-TIFF image shape: {image.shape} "
          f"with axes {metadata.get('axes', 'N/A')}")
 
-   om.open_in_napari(image, metadata, fname_converted)
+   om.open_in_napari(image, metadata)
 
 .. code-block:: text
 

@@ -210,11 +210,19 @@ visualization. Let's open the previously read image in Napari:
 
 .. code-block:: python
 
-   om.open_in_napari(image, metadata, fname)
+   om.open_in_napari(image, metadata)
 
 .. image:: _static/figures/open_13374_in_napari.jpg
    :target: _static/figures/open_13374_in_napari.jpg
    :alt: Napari viewer showing the example image
+
+If no explicit ``image_name`` is provided, OMIO derives the Napari layer name from
+the OMIO metadata, for example from ``metadata["Annotations"]["original_filename"]``.
+You can still override the display name manually:
+
+.. code-block:: python
+
+   om.open_in_napari(image, metadata, image_name="my_display_name")
 
 For demonstration purposes, we change the ``PhysicalSizeZ`` metadata entry to an
 incorrect value and re-open the image in Napari to see that Napari correctly rescales
@@ -225,14 +233,14 @@ the Z axis based on the provided metadata:
    print(f"Original PhysicalSizeZ: {metadata['PhysicalSizeZ']} microns")
    metadata["PhysicalSizeZ"] = 5  # wrong value in microns
    print(f"Modified PhysicalSizeZ: {metadata['PhysicalSizeZ']} microns")
-   om.open_in_napari(image, metadata, fname)
+   om.open_in_napari(image, metadata)
 
 If you do not want to see terminal output from OMIO, you can set ``verbose=False`` in any
 OMIO function call. For example:
 
 .. code-block:: python
 
-   om.open_in_napari(image, metadata, fname, verbose=False)
+   om.open_in_napari(image, metadata, verbose=False)
 
 
 Ensured OME Compliance upon Reading
@@ -257,7 +265,19 @@ or OME-TIFF metadata.
    image_5d, metadata_5d = om.imread(fname_5d)
    print(f"5D Image shape: {image_5d.shape} with axes {metadata_5d.get('axes', 'N/A')}")
    pprint.pprint(metadata_5d)
-   om.open_in_napari(image_5d, metadata_5d, fname_5d)
+   om.open_in_napari(image_5d, metadata_5d)
+
+For multichannel data, channel layers can be named explicitly. OMIO opens Napari
+layers with ``blending="additive"`` by default, but you can pass any Napari-supported
+blending mode:
+
+.. code-block:: python
+
+   om.open_in_napari(
+       image_5d,
+       metadata_5d,
+       layer_names=["channel 0", "channel 1"],
+       blending="additive")
 
 Output (only the printed shape and axes shown here):
   
@@ -278,7 +298,7 @@ Output (only the printed shape and axes shown here):
    image_2d, metadata_2d = om.imread(fname_2d)
    print(f"2D Image shape: {image_2d.shape} with axes {metadata_2d.get('axes', 'N/A')}")
    pprint.pprint(metadata_2d)
-   om.open_in_napari(image_2d, metadata_2d, fname_2d)
+   om.open_in_napari(image_2d, metadata_2d)
 
 Output (only the printed shape and axes shown here):
   
@@ -305,7 +325,7 @@ singleton axes (S) required for ImageJ compatibility:
    image_4d, metadata_4d = om.imread(fname_4d)
    print(f"4D Image shape: {image_4d.shape} with axes {metadata_4d.get('axes', 'N/A')}")
    pprint.pprint(metadata_4d)
-   om.open_in_napari(image_4d, metadata_4d, fname_4d)
+   om.open_in_napari(image_4d, metadata_4d)
 
 Terminal output during the reading process (``verbose=True`` by default):
 
@@ -370,7 +390,7 @@ The same accounts for the following 6D TIFF files with ImageJ Hyperstack metadat
    image_6d, metadata_6d = om.imread(fname_6d)
    print(f"6D Image shape: {image_6d.shape} with axes {metadata_6d.get('axes', 'N/A')}")
    pprint.pprint(metadata_6d)
-   om.open_in_napari(image_6d, metadata_6d, fname_6d)
+   om.open_in_napari(image_6d, metadata_6d)
 
 Output (only the printed shape and axes shown here):
 
@@ -392,7 +412,7 @@ tries to retain the full dimensionality of the image to avoid any loss of inform
    image_6d, metadata_6d = om.imread(fname_6d)
    print(f"6D Image shape: {image_6d.shape} with axes {metadata_6d.get('axes', 'N/A')}")
    pprint.pprint(metadata_6d)
-   om.open_in_napari(image_6d, metadata_6d, fname_6d)
+   om.open_in_napari(image_6d, metadata_6d)
 
 Output (only the printed shape and axes shown here):
 
@@ -410,7 +430,7 @@ Let's also open an OME-TIFF file:
    image_ometiff, metadata_ometiff = om.imread(fname_ometiff)
    print(f"OME-TIFF Image shape: {image_ometiff.shape} with axes {metadata_ometiff.get('axes', 'N/A')}")
    pprint.pprint(metadata_ometiff)
-   om.open_in_napari(image_ometiff, metadata_ometiff, fname_ometiff)
+   om.open_in_napari(image_ometiff, metadata_ometiff)
 
 Output:
 
@@ -477,7 +497,7 @@ Let's inspect the written OME-TIFF file:
    fname_2d_written = "example_data/tif_dummy_data/tif_single_files/omio_converted/YX.ome.tif"
    image_2d_written, metadata_2d_written = om.imread(fname_2d_written)
    pprint.pprint(metadata_2d_written)
-   om.open_in_napari(image_2d_written, metadata_2d_written, fname_2d_written)
+   om.open_in_napari(image_2d_written, metadata_2d_written)
 
 Output:
 

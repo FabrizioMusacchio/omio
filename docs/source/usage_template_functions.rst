@@ -85,8 +85,7 @@ You can now manipulate the created empty image as needed:
    read_my_image, read_my_metadata = om.imread(
        os.path.join(pathname_save, "my_empty_image_filled.ome.tif"))
 
-   om.open_in_napari(read_my_image, read_my_metadata,
-        os.path.join(pathname_save, "my_empty_image_filled.ome.tif"))
+   om.open_in_napari(read_my_image, read_my_metadata)
 
 .. image:: _static/figures/open_custom_created_images_in_napari.jpg
    :target: _static/figures/open_custom_created_images_in_napari.jpg
@@ -129,8 +128,7 @@ by manually updating the relevant metadata entries, or by using OMIO’s utility
 
    om.open_in_napari(
        read_my_cropped_image,
-       read_my_cropped_metadata,
-       os.path.join(pathname_save, "my_cropped_image.ome.tif"))
+       read_my_cropped_metadata)
 
 .. code-block:: text
 
@@ -181,4 +179,3 @@ the path recorded in the metadata:
 .. code-block:: python
 
    om.cleanup_omio_cache(my_zarr_metadata["omio_cache_folder"], full_cleanup=True)
-

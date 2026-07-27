@@ -5286,16 +5286,97 @@ def _squeeze_zarr_to_napari_cache_dask(src, fname, axes, cache_folder_name=".omi
 
     return squeezed_zarr, squeezed_axes
 
+def _strip_image_extension(name: str) -> str:
+    """
+    Return a display-oriented image name without common microscopy file suffixes.
+    """
+    name = os.path.basename(str(name))
+    lname = name.lower()
+    for suffix in (".ome.tiff", ".ome.tif", ".tiff", ".tif", ".czi", ".lsm", ".raw", ".zarr"):
+        if lname.endswith(suffix):
+            return name[:-len(suffix)]
+    return os.path.splitext(name)[0]
+
+def _metadata_lookup(metadata: dict, key: str, default=None):
+    """
+    Look up a metadata key at top level first and then inside Annotations.
+    """
+    if not isinstance(metadata, dict):
+        return default
+    if key in metadata:
+        return metadata[key]
+    annotations = metadata.get("Annotations", {})
+    if isinstance(annotations, dict):
+        return annotations.get(key, default)
+    return default
+
+def _derive_image_name_from_metadata(metadata: dict, fallback: Union[None, str] = None) -> str:
+    """
+    Derive a user-facing image name from OMIO metadata or a fallback path/name.
+    """
+    for key in ("original_filename", "filename", "Filename", "file_name"):
+        value = _metadata_lookup(metadata, key)
+        if value:
+            return _strip_image_extension(str(value))
+    if fallback:
+        return _strip_image_extension(str(fallback))
+    return "omio_image"
+
+def _derive_napari_layer_name(metadata: dict, image_name: Union[None, str] = None) -> str:
+    """
+    Derive a Napari layer name, giving explicit user input priority over metadata.
+    """
+    if image_name is not None:
+        return _strip_image_extension(str(image_name))
+    return _derive_image_name_from_metadata(metadata)
+
+def _derive_napari_cache_anchor(image,
+                                metadata: dict,
+                                image_name: Union[None, str] = None,
+                                cache_folder_name: str = ".omio_cache") -> str:
+    """
+    Derive a stable path anchor for Napari-derived Zarr caches.
+
+    File-backed Zarr arrays use their own store path. In-memory arrays fall back to
+    OMIO metadata paths, then to the current working directory.
+    """
+    if isinstance(image, zarr.core.array.Array):
+        try:
+            store_path = str(image.store).replace("file://", "")
+            if store_path and not store_path.startswith("<") and "MemoryStore" not in store_path:
+                return store_path[:-5] if store_path.endswith(".zarr") else store_path
+        except Exception:
+            pass
+
+    zarr_path = _metadata_lookup(metadata, "omio_zarr_store_path")
+    if zarr_path:
+        zarr_path = str(zarr_path)
+        return zarr_path[:-5] if zarr_path.endswith(".zarr") else zarr_path
+
+    cache_folder = _metadata_lookup(metadata, "omio_cache_folder")
+    if cache_folder:
+        parent = os.path.dirname(os.path.normpath(str(cache_folder)))
+        return os.path.join(parent, _derive_image_name_from_metadata(metadata, fallback=image_name))
+
+    parent = _metadata_lookup(metadata, "original_parentfolder")
+    if parent:
+        return os.path.join(str(parent), _derive_image_name_from_metadata(metadata, fallback=image_name))
+
+    return os.path.join(os.getcwd(), _derive_image_name_from_metadata(metadata, fallback=image_name))
+
 # main single-image handle for Napari visualization of image(s) as NumPy, Zarr, or Zarr + Dask:
 def _single_image_open_in_napari(
         image: Union[np.ndarray, "zarr.core.array.Array"], 
         metadata: dict, 
-        fname: str, 
+        image_name: Union[None, str] = None, 
         zarr_mode: str = "numpy",
         cache_folder_name: str = ".omio_cache", 
         axes_full: str = "TZCYX", 
         viewer=None,
-        viewer_name: Union[None, str] = None, 
+        viewer_name: Union[None, str] = None,
+        layer_names: Union[None, str, list[str]] = None,
+        blending: str = "additive",
+        fname: Union[None, str] = None,
         verbose: bool = True
         ) -> tuple["napari.Viewer", "napari.layers.Image", Union[np.ndarray, "zarr.core.array.Array"], str]:
     """
@@ -5331,8 +5412,10 @@ def _single_image_open_in_napari(
         first element is used. The metadata should provide physical voxel sizes
         (``PhysicalSizeX``, ``PhysicalSizeY``, ``PhysicalSizeZ``) and optionally a
         length unit under ``unit``.
-    fname : str
-        Source filename used to derive the default layer name and cache locations.
+    image_name : str or None, optional
+        Display name or path used to derive the default layer name. If None, OMIO
+        derives the name from metadata entries such as
+        ``Annotations["original_filename"]``. Default is None.
     zarr_mode : {"numpy", "zarr_nodask", "zarr_dask"}, optional
         Strategy for handling Zarr inputs. Default is ``"numpy"``.
     cache_folder_name : str, optional
@@ -5346,7 +5429,17 @@ def _single_image_open_in_napari(
         Existing Napari viewer to reuse. If None, a current viewer is reused if
         available, otherwise a new viewer is created.
     viewer_name : str or None, optional
-        Explicit layer name to use. If None, the basename of `fname` is used.
+        Explicit layer name to use. This legacy argument is kept for internal
+        compatibility. If provided, it takes precedence over `image_name`.
+    layer_names : str, list of str, or None, optional
+        Explicit Napari layer name(s). A string names the added image layer. A list
+        is passed through to Napari, which is useful for naming channel layers when
+        `channel_axis` is present. Default is None.
+    blending : str, optional
+        Napari blending mode forwarded to ``viewer.add_image``. Default is
+        ``"additive"``.
+    fname : str or None, optional
+        Deprecated alias for `image_name`, accepted for backward compatibility.
     verbose : bool, optional
         If True, print diagnostic progress messages. Default is True.
 
@@ -5382,6 +5475,8 @@ def _single_image_open_in_napari(
     * When `zarr_mode` produces a Zarr store, the store is written under the cache
     folder and may overwrite an existing derived store with the same name.
     """
+    if image_name is None and fname is not None:
+        image_name = fname
 
     # fallback normalization: extract first element from lists/tuples
     if isinstance(image, (list, tuple)):
@@ -5403,8 +5498,11 @@ def _single_image_open_in_napari(
             # Zarr → squeezed Zarr w/ Dask:
             if verbose:
                 print("  Using Dask for memory-efficient squeezing...")
-            store_path = str(image.store).replace("file://", "")
-            base_no_ext = store_path.replace(".zarr", "")
+            base_no_ext = _derive_napari_cache_anchor(
+                image=image,
+                metadata=metadata,
+                image_name=image_name,
+                cache_folder_name=cache_folder_name)
 
             squeezed_zarr, squeezed_axes = _squeeze_zarr_to_napari_cache_dask(src=image,
                                                 fname=base_no_ext, axes=axes_full,
@@ -5416,8 +5514,11 @@ def _single_image_open_in_napari(
             # Zarr → squeezed Zarr w/o Dask:
             if verbose:
                 print("  Memory-efficient squeezing Zarr without Dask...")
-            store_path = str(image.store).replace("file://", "")
-            base_no_ext = store_path.replace(".zarr", "")
+            base_no_ext = _derive_napari_cache_anchor(
+                image=image,
+                metadata=metadata,
+                image_name=image_name,
+                cache_folder_name=cache_folder_name)
             squeezed_zarr, squeezed_axes = _squeeze_zarr_to_napari_cache(src=image,
                                                 fname=base_no_ext, axes=axes_full,
                                                 cache_folder_name=cache_folder_name)
@@ -5471,10 +5572,12 @@ def _single_image_open_in_napari(
             viewer = napari.Viewer()
 
     # build layer name:
-    if viewer_name is not None:
+    if layer_names is not None:
+        layer_name = layer_names
+    elif viewer_name is not None:
         layer_name = viewer_name
     else:
-        layer_name = os.path.basename(fname)
+        layer_name = _derive_napari_layer_name(metadata, image_name=image_name)
     
     # convert napari_data into a dask-array if it's a Zarr (napari handles zarr dask arrays better):
     if isinstance(napari_data, zarr.core.array.Array):
@@ -5482,7 +5585,7 @@ def _single_image_open_in_napari(
     
     # add the new image layer:
     layer = viewer.add_image(napari_data, channel_axis=channel_axis, 
-                             scale=scales_array, name=layer_name)
+                             scale=scales_array, name=layer_name, blending=blending)
     viewer.scale_bar.visible = True
     viewer.scale_bar.unit = metadata.get("unit", "micron")
 
@@ -5490,12 +5593,15 @@ def _single_image_open_in_napari(
 # main multi-image handler for Napari visualization of image(s) as NumPy, Zarr, or Zarr + Dask:
 def open_in_napari(images: Union[np.ndarray, "zarr.core.array.Array", list[Union[np.ndarray, "zarr.core.array.Array"]]],
                    metadatas: Union[dict, list[dict]], 
-                   fname: str, 
+                   image_name: Union[None, str] = None,
                    zarr_mode: str = "numpy", 
                    cache_folder_name: str = ".omio_cache", 
                    axes_full: str = "TZCYX", 
                    viewer: napari.Viewer = None, 
-                   returns: bool=False, 
+                   returns: bool=False,
+                   layer_names: Union[None, str, list[str], list[list[str]]] = None,
+                   blending: str = "additive",
+                   fname: Union[None, str] = None,
                    verbose: bool=True):
     """
     Open or extend a Napari viewer with one or multiple OMIO images.
@@ -5524,9 +5630,10 @@ def open_in_napari(images: Union[np.ndarray, "zarr.core.array.Array", list[Union
         provide the physical voxel sizes used for Napari scaling (typically
         ``PhysicalSizeX``, ``PhysicalSizeY``, ``PhysicalSizeZ``) and optionally a
         unit string under ``unit``.
-    fname : str
-        Base name used for Napari layer naming and cache path construction. If
-        multiple images are provided, an ``_idx{n}`` suffix is appended.
+    image_name : str or None, optional
+        Display name or path used to derive default Napari layer names. If None,
+        OMIO derives names from metadata entries such as
+        ``Annotations["original_filename"]``. Default is None.
     zarr_mode : {"numpy", "zarr_nodask", "zarr_dask"}, optional
         Strategy for handling Zarr inputs, forwarded to
         ``_single_image_open_in_napari``. Default is ``"numpy"``.
@@ -5542,6 +5649,17 @@ def open_in_napari(images: Union[np.ndarray, "zarr.core.array.Array", list[Union
     returns : bool, optional
         If True, return detailed objects (viewer, layers, napari_datas, napari_axess).
         If False, the function returns None. Default is False.
+    layer_names : str, list of str, list of list of str, or None, optional
+        Explicit Napari layer name(s). A string names the layer for a single image
+        or acts as a base name for multiple images. For one image with a channel
+        axis, a list of strings is passed to Napari to name the channel layers. For
+        multiple images, a list matching the number of images names each image
+        layer. Default is None.
+    blending : str, optional
+        Napari blending mode forwarded to ``viewer.add_image``. Default is
+        ``"additive"``.
+    fname : str or None, optional
+        Deprecated alias for `image_name`, accepted for backward compatibility.
     verbose : bool, optional
         If True, print diagnostic progress messages. Default is True.
 
@@ -5571,10 +5689,13 @@ def open_in_napari(images: Union[np.ndarray, "zarr.core.array.Array", list[Union
       inputs already follow OMIO’s canonical axis convention as declared by
       ``axes_full``, and delegates squeezing, channel-axis inference, and scaling to
       ``_single_image_open_in_napari``.
-    * When multiple images are opened, the layer name is derived from ``fname`` with a
-      simple index suffix; if more informative naming is desired, pass a distinct
-      ``fname`` per call or use the ``viewer_name`` mechanism in the single-image helper.
+    * The former ``fname`` argument is still accepted as an alias for
+      `image_name`, so existing code using a third positional argument or
+      ``fname=...`` continues to work.
     """
+    if image_name is None and fname is not None:
+        image_name = fname
+
     # check, whether images and metadatas are lists:
     if not isinstance(images, (list, tuple)):
         images = [images]
@@ -5590,22 +5711,38 @@ def open_in_napari(images: Union[np.ndarray, "zarr.core.array.Array", list[Union
     napari_datas = []
     napari_axess = []
 
+    per_image_layer_names = [layer_names] * len(images)
+    if isinstance(layer_names, str):
+        if len(images) > 1:
+            per_image_layer_names = [f"{layer_names}_idx{idx}" for idx in range(len(images))]
+        else:
+            per_image_layer_names = [layer_names]
+    elif isinstance(layer_names, (list, tuple)) and len(images) > 1 and len(layer_names) == len(images):
+        per_image_layer_names = list(layer_names)
+
     for idx, (img, md) in enumerate(zip(images, metadatas)):
         if verbose:
             print(f"Opening image {idx+1}/{len(images)} in napari...")
         
-        # build layer name:
-        layer_fname = fname if len(images) == 1 else f"{fname}_idx{idx}"
+        # build image name fallback:
+        if image_name is None:
+            layer_image_name = None
+        elif len(images) == 1:
+            layer_image_name = image_name
+        else:
+            layer_image_name = f"{_strip_image_extension(str(image_name))}_idx{idx}"
         
         # open in napari:
         v, layer, napari_data, napari_axes = _single_image_open_in_napari(
             image=img,
             metadata=md,
-            fname=layer_fname,
+            image_name=layer_image_name,
             zarr_mode=zarr_mode,
             cache_folder_name=cache_folder_name,
             axes_full=axes_full,
             viewer=viewer,
+            layer_names=per_image_layer_names[idx],
+            blending=blending,
             verbose=verbose)
         viewer = v
         layers.append(layer)

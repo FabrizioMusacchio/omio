@@ -109,7 +109,16 @@ pprint.pprint(metadata)
 OMIO comes with built-in support to open images directly in Napari for interactive. Let's
 open the previously read image in Napari:
 """
-om.open_in_napari(image, metadata, fname)
+om.open_in_napari(image, metadata)
+
+# %% NAPARI LAYER NAMES AND BLENDING
+"""
+If `image_name=None` (the default), OMIO derives the Napari layer name from the metadata,
+for example from `metadata["Annotations"]["original_filename"]`. You can still override
+the display name explicitly. Multichannel data can also receive per-channel layer names,
+and OMIO opens layers with additive blending by default.
+"""
+om.open_in_napari(image, metadata, image_name="custom display name")
 
 """ 
 For the sake of demonstration, we change the PhysicalSizeZ metadata entry to a wrong value
@@ -119,14 +128,14 @@ the provided metadata:
 print(f"Original PhysicalSizeZ: {metadata['PhysicalSizeZ']} microns")
 metadata["PhysicalSizeZ"] = 5  # wrong value in microns
 print(f"Modified PhysicalSizeZ: {metadata['PhysicalSizeZ']} microns")
-om.open_in_napari(image, metadata, fname)
+om.open_in_napari(image, metadata)
 
 """ 
 If you don't want to see terminal outputs from OMIO, you can set `verbose=False` in any
 OMIO function call. For example:
 """
 
-om.open_in_napari(image, metadata, fname, verbose=False)
+om.open_in_napari(image, metadata, verbose=False)
 
 # %% ENSURED OME-COMPLIANCE UPON READING
 """
@@ -151,13 +160,17 @@ fname_5d = "../example_data/tif_dummy_data/tif_single_files/TZCYX_T5_Z10_C2.tif"
 image_5d, metadata_5d = om.imread(fname_5d)
 print(f"5D Image shape: {image_5d.shape} with axes {metadata_5d.get('axes', 'N/A')}")
 pprint.pprint(metadata_5d)
-om.open_in_napari(image_5d, metadata_5d, fname_5d)
+om.open_in_napari(
+    image_5d,
+    metadata_5d,
+    layer_names=["channel 0", "channel 1"],
+    blending="additive")
 
 fname_2d = "../example_data/tif_dummy_data/tif_single_files/YX.tif"
 image_2d, metadata_2d = om.imread(fname_2d)
 print(f"2D Image shape: {image_2d.shape} with axes {metadata_2d.get('axes', 'N/A')}")
 pprint.pprint(metadata_2d)
-om.open_in_napari(image_2d, metadata_2d, fname_2d)
+om.open_in_napari(image_2d, metadata_2d)
 
 """
 As you can see, OMIO correctly infers the OME-compliant axes and adds default OME metadata
@@ -171,13 +184,13 @@ fname_4d = "../example_data/tif_dummy_data/tif_with_ImageJ/TYXS_T1.tif"
 image_4d, metadata_4d = om.imread(fname_4d)
 print(f"4D Image shape: {image_4d.shape} with axes {metadata_4d.get('axes', 'N/A')}")
 pprint.pprint(metadata_4d)
-om.open_in_napari(image_4d, metadata_4d, fname_4d)
+om.open_in_napari(image_4d, metadata_4d)
 
 fname_6d = "../example_data/tif_dummy_data/tif_with_ImageJ/TZCYXS_C1_Z10_T2.tif"
 image_6d, metadata_6d = om.imread(fname_6d)
 print(f"6D Image shape: {image_6d.shape} with axes {metadata_6d.get('axes', 'N/A')}")
 pprint.pprint(metadata_6d)
-om.open_in_napari(image_6d, metadata_6d, fname_6d)
+om.open_in_napari(image_6d, metadata_6d)
 
 """ 
 Note, that due to the extra singleton axes, the artificially created tif files were saved
@@ -192,7 +205,7 @@ fname_6d = "../example_data/tif_dummy_data/tif_with_ImageJ/TZCYXS_T5_Z10_C2.tif"
 image_6d, metadata_6d = om.imread(fname_6d)
 print(f"6D Image shape: {image_6d.shape} with axes {metadata_6d.get('axes', 'N/A')}")
 pprint.pprint(metadata_6d)
-om.open_in_napari(image_6d, metadata_6d, fname_6d)
+om.open_in_napari(image_6d, metadata_6d)
 
 """ 
 Let's also open an OME-TIFF file:
@@ -202,7 +215,7 @@ fname_ometiff = "../example_data/tif_dummy_data/ome_tif/TZCYX_T5_Z10_C2.ome.tif"
 image_ometiff, metadata_ometiff = om.imread(fname_ometiff)
 print(f"OME-TIFF Image shape: {image_ometiff.shape} with axes {metadata_ometiff.get('axes', 'N/A')}")
 pprint.pprint(metadata_ometiff)
-om.open_in_napari(image_ometiff, metadata_ometiff, fname_ometiff)
+om.open_in_napari(image_ometiff, metadata_ometiff)
 
 # %% ENSURED OME-COMPLIANCE UPON WRITING
 """ 
@@ -233,7 +246,7 @@ fname_2d_written = "../example_data/tif_dummy_data/tif_single_files/omio_convert
 image_2d_written, metadata_2d_written = om.imread(fname_2d_written)
 print(f"Written 2D Image shape: {image_2d_written.shape} with axes {metadata_2d_written.get('axes', 'N/A')}")
 pprint.pprint(metadata_2d_written)
-om.open_in_napari(image_2d_written, metadata_2d_written, fname_2d_written)
+om.open_in_napari(image_2d_written, metadata_2d_written)
 
 """ 
 Of course, you can open the written OME-TIFF file in any OME-compliant software such as
@@ -278,7 +291,7 @@ fname_lsm = "../example_data/lsm_test_file/032113-18.lsm"
 image_lsm, metadata_lsm = om.imread(fname_lsm)
 print(f"LSM image shape: {image_lsm.shape}")
 pprint.pprint(metadata_lsm)
-om.open_in_napari(image_lsm, metadata_lsm, fname_lsm)
+om.open_in_napari(image_lsm, metadata_lsm)
 
 # %% READING CZI FILES
 """
@@ -290,7 +303,7 @@ fname_czi = "../example_data/czi_test_file/xt-scan-lsm980.czi"
 image_czi, metadata_czi = om.imread(fname_czi)
 print(f"CZI image shape: {image_czi.shape}")
 pprint.pprint(metadata_czi)
-om.open_in_napari(image_czi, metadata_czi, fname_czi)
+om.open_in_napari(image_czi, metadata_czi)
 
 # %% READING THORLABS RAW FILES
 """
@@ -311,7 +324,7 @@ Thorlabs RAW files always requires both the RAW file and its associated XML file
 image_raw, metadata_raw = om.imread(fname_raw)
 print(f"Thorlabs RAW image shape: {image_raw.shape}")
 pprint.pprint(metadata_raw)
-om.open_in_napari(image_raw, metadata_raw, fname_raw)
+om.open_in_napari(image_raw, metadata_raw)
 
 """ 
 If the according XML file is missing or cannot be found, `imread` will give a warning 
@@ -347,7 +360,7 @@ om.create_thorlabs_raw_yaml(fname_raw, T=5, Z=10, C=2, Y=20, X=20, bits=16,
                             pixelunit="micron", physicalsize_xyz=(0.5, 0.5, 1.0),
                             time_increment=1.0, time_increment_unit="seconds")
 image_raw, metadata_raw = om.imread(fname_raw)
-om.open_in_napari(image_raw, metadata_raw, fname_raw)
+om.open_in_napari(image_raw, metadata_raw)
 
 # %% READING MULTI-SERIES TIFF STACKS
 """
@@ -451,7 +464,7 @@ fname_multifile_ometiff = "../example_data/tif_dummy_data/tif_ome_multi_file_ser
 image_multifile_ometiff, metadata_multifile_ometiff = om.imread(fname_multifile_ometiff)
 print(f"Multi-file OME-TIFF image shape: {image_multifile_ometiff.shape}")
 pprint.pprint(metadata_multifile_ometiff)
-om.open_in_napari(image_multifile_ometiff, metadata_multifile_ometiff, fname_multifile_ometiff)
+om.open_in_napari(image_multifile_ometiff, metadata_multifile_ometiff)
 
 """ 
 Note: This only works for multi-file OME-TIFF series where each individual TIFF file contains
@@ -492,7 +505,7 @@ print(f"Lazy memmap image shape: {image_lazy_memmap.shape}")
 print(f"Lazy memmap image type: {type(image_lazy_memmap)}")
 image_lazy_memmap
 
-om.open_in_napari(image_lazy_memmap, metadata_lazy_memmap, fname)
+om.open_in_napari(image_lazy_memmap, metadata_lazy_memmap)
 
 """ 
 Note: If you have opened an image with Napari in the same interactive session before, OMIO
@@ -563,7 +576,7 @@ correctly scale the Z axis upon viewing:
 metadata_large["PhysicalSizeZ"] = 5  # in microns
 
 # now open the large image in Napari. First, we do it w/o DASK (`zarr_mode="zarr_nodask"`):
-om.open_in_napari(image_large, metadata_large, fname, zarr_mode="zarr_nodask")
+om.open_in_napari(image_large, metadata_large, zarr_mode="zarr_nodask")
 
 """
 Internally, OMIO's Napari viewing function will correctly handle the true image scalings
@@ -575,7 +588,7 @@ for parallelized re-ordering and writing of the temporary Zarr store.
 """
 
 # and now with DASK support for out-of-core processing:
-om.open_in_napari(image_large, metadata_large, fname, zarr_mode="zarr_dask")
+om.open_in_napari(image_large, metadata_large, zarr_mode="zarr_dask")
 
 """ 
 With `returns=True`, the Napari viewer instance, the created Napari layers, the used
@@ -583,7 +596,6 @@ Zarr array, and the used axes order are also returned for further programmatic u
 """
 napari_viewer, napari_layers, napari_datas, napari_axes = om.open_in_napari(image_large, 
                                                                             metadata_large, 
-                                                                            fname, 
                                                                             zarr_mode="zarr_dask", 
                                                                             returns=True)
 
@@ -799,7 +811,7 @@ om.bids_batch_convert(fname, sub=id_tag, exp=exp_tag, relative_path="omio_bids_c
 fname_converted = "../example_data/tif_dummy_data/BIDS_project_example/ID0001/TP006_tif_multi_file_stack/omio_bids_converted/TZCYX_T5_Z10_C2_Z00_C0_T0.ome.tif"
 image, metadata = om.imread(fname_converted)
 print(f"Multi-file OME-TIFF image shape: {image.shape} with axes {metadata.get('axes', 'N/A')}")
-om.open_in_napari(image, metadata, fname_converted)
+om.open_in_napari(image, metadata)
 # %% CREATING EMPTY, OME-COMPLIANT IMAGE ARRAYS AND METADATA
 """
 OMIO provides a utility functions called `create_empty_image`, `create_empty_metadata`, and
@@ -846,7 +858,7 @@ pathname_save = "../example_data/custom_created_images/"
 os.makedirs(pathname_save, exist_ok=True)
 om.imwrite(os.path.join(pathname_save, "my_empty_image_filled.ome.tif"), my_image, my_metadata)
 read_my_image, read_my_metadata = om.imread(os.path.join(pathname_save, "my_empty_image_filled.ome.tif"))
-om.open_in_napari(read_my_image, read_my_metadata, os.path.join(pathname_save, "my_empty_image_filled.ome.tif"))
+om.open_in_napari(read_my_image, read_my_metadata)
 
 # %% CREATE AN EMPTY IMAGE DIRECTLY AS AN ON-DISK ZARR ARRAY
 """
@@ -892,5 +904,5 @@ my_cropped_metadata = om.update_metadata_from_image(my_metadata, my_cropped_imag
 print(f"Updated cropped image metadata axes: {my_cropped_metadata.get('axes', 'N/A')} with shape: {my_cropped_image.shape}.")
 om.imwrite(os.path.join(pathname_save, "my_cropped_image.ome.tif"), my_cropped_image, my_cropped_metadata)
 read_my_cropped_image, read_my_cropped_metadata = om.imread(os.path.join(pathname_save, "my_cropped_image.ome.tif"))
-om.open_in_napari(read_my_cropped_image, read_my_cropped_metadata, os.path.join(pathname_save, "my_cropped_image.ome.tif"))
+om.open_in_napari(read_my_cropped_image, read_my_cropped_metadata)
 # %% END

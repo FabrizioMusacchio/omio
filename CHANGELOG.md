@@ -14,25 +14,31 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 June 21, 2026
 
-This upcoming maintenance update improves documentation consistency across OMIO's main public API by aligning the docstring return and exception sections of several core functions.
+This upcoming maintenance update improves documentation consistency across OMIO's main public API, extends disk-backed template-image workflows, and makes Napari visualization more convenient and customizable.
 
 ### 📃 Changes
 #### ✨ Added
 * Extended `create_empty_image` for disk-backed Zarr workflows via `zarr_store="disk"` together with `zarr_store_path`.
 * Disk-backed empty images now record `omio_cache_folder`, `omio_zarr_store_path`, `omio_zarr_store_name`, and `omio_zarr_store_type` in the returned metadata.
 * Disk-backed empty-image Zarr stores now persist OMIO metadata and cache information in their Zarr attributes.
+* Added `image_name`, `layer_names`, and `blending` options to `open_in_napari`.
+* `open_in_napari(..., image_name=None)` now derives layer names from OMIO metadata such as `Annotations["original_filename"]` when available.
 
 #### 🧩 Changed
 * `create_empty_image(..., zarr_store="disk")` now uses `zarr_store_name="empty_image"` when no explicit store name is provided.
 * `cleanup_omio_cache` can now remove a directly provided `.omio_cache` folder, enabling cleanup via `om.cleanup_omio_cache(my_metadata["omio_cache_folder"], full_cleanup=True)`.
+* Napari layers now use `blending="additive"` by default, while still allowing any Napari-supported blending mode to be passed through.
+* The former `open_in_napari(..., fname=...)` argument remains available as a backward-compatible alias for `image_name`.
 
 #### 📚 Documentation
 * Harmonized the `Parameters`/`Returns`/`Raises` docstring layout of `imread`, `read_thorlabs_raw`, `imconvert`, and `bids_batch_convert` with OMIO's primary documentation style used by functions such as `imwrite` and `cleanup_omio_cache`.
 * Clarified return-value descriptions for high-level reader and conversion functions to make the generated API reference more uniform and easier to scan.
 * Added tutorial coverage for creating empty OMIO arrays directly as on-disk Zarr stores and cleaning them up via metadata-recorded cache paths.
+* Updated Napari examples in the interactive tutorial and Read the Docs pages to show metadata-derived layer naming, explicit `image_name`, per-channel `layer_names`, and configurable blending.
 
 #### 🧪 Testing and robustness
 * Added regression tests for disk-backed empty-image metadata, persisted Zarr attributes, default store naming, and cache cleanup using the metadata-provided cache folder.
+* Added Napari regression tests for metadata-derived layer names, backward-compatible explicit names, per-channel layer names, and blending pass-through.
 
 ---
 

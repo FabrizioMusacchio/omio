@@ -5156,7 +5156,7 @@ class FakeViewer:
         self.scale_bar = FakeScaleBar()
         self.added = []
 
-    def add_image(self, data, channel_axis=None, scale=None, name=None):
+    def add_image(self, data, channel_axis=None, scale=None, name=None, blending=None):
         layer = object()
         self.added.append(
             {
@@ -5164,6 +5164,7 @@ class FakeViewer:
                 "channel_axis": channel_axis,
                 "scale": scale,
                 "name": name,
+                "blending": blending,
                 "layer": layer,
             }
         )
@@ -5175,6 +5176,7 @@ def _make_metadata(unit: str = "micron"):
         "PhysicalSizeY": 1.5,
         "PhysicalSizeZ": 2.5,
         "unit": unit,
+        "Annotations": {"original_filename": "metadata_name.tif"},
     }
 
 def _make_deterministic_5d(shape_tzcyx=(1, 2, 3, 4, 5), dtype=np.uint16) -> np.ndarray:
@@ -5330,8 +5332,9 @@ def test_single_image_open_in_napari_numpy_input_uses_expected_channel_axis_and_
     assert len(fake_viewer.added) == 1
     call = fake_viewer.added[0]
     assert call["channel_axis"] == 0
-    assert call["name"] == "in.tif"
+    assert call["name"] == "in"
     assert call["scale"] == (md["PhysicalSizeY"], md["PhysicalSizeX"])
+    assert call["blending"] == "additive"
 
     assert fake_viewer.scale_bar.visible is True
     assert fake_viewer.scale_bar.unit == "micron"
@@ -5352,14 +5355,13 @@ def test_single_image_open_in_napari_zarr_nodask_creates_side_store_and_passes_d
     viewer, layer, napari_data, napari_axes = _single_image_open_in_napari(
         image=src,
         metadata=md,
-        fname=str(tmp_path / "src.ome.tif"),
         zarr_mode="zarr_nodask",
         axes_full="TZCYX",
         viewer=None,
         verbose=False,
     )
 
-    # nodask squeeze writes to base_no_ext derived from store_path, that is "<...>/src"
+    # nodask squeeze derives the cache anchor directly from the Zarr store path.
     expected_side_store = tmp_path / "src"
     assert expected_side_store.exists()
 
@@ -5370,6 +5372,7 @@ def test_single_image_open_in_napari_zarr_nodask_creates_side_store_and_passes_d
     assert isinstance(call["data"], da.Array)
     assert call["channel_axis"] is None
     assert call["scale"] == (md["PhysicalSizeZ"], md["PhysicalSizeY"], md["PhysicalSizeX"])
+    assert call["blending"] == "additive"
 
 def test_open_in_napari_multiple_images_reuses_viewer_and_appends_idx_suffix(monkeypatch, tmp_path: Path):
     import omio.omio as m
@@ -5400,6 +5403,54 @@ def test_open_in_napari_multiple_images_reuses_viewer_and_appends_idx_suffix(mon
 
     assert fake_viewer.added[0]["name"] == "base_name_idx0"
     assert fake_viewer.added[1]["name"] == "base_name_idx1"
+
+def test_open_in_napari_uses_metadata_filename_when_image_name_is_none(monkeypatch):
+    import omio.omio as m
+
+    fake_viewer = FakeViewer()
+    monkeypatch.setattr(m.napari, "current_viewer", lambda: fake_viewer)
+    monkeypatch.setattr(m.napari, "Viewer", lambda: FakeViewer())
+
+    md = _make_metadata(unit="micron")
+    md["Annotations"]["original_filename"] = "13374.tif"
+    img = _make_deterministic_5d(shape_tzcyx=(1, 1, 1, 4, 4))
+
+    viewer, layers, datas, axess = open_in_napari(
+        images=img,
+        metadatas=md,
+        image_name=None,
+        zarr_mode="numpy",
+        axes_full="TZCYX",
+        returns=True,
+        verbose=False,
+    )
+
+    assert viewer is fake_viewer
+    assert fake_viewer.added[0]["name"] == "13374"
+
+def test_open_in_napari_layer_names_and_blending_are_forwarded(monkeypatch):
+    import omio.omio as m
+
+    fake_viewer = FakeViewer()
+    monkeypatch.setattr(m.napari, "current_viewer", lambda: fake_viewer)
+    monkeypatch.setattr(m.napari, "Viewer", lambda: FakeViewer())
+
+    md = _make_metadata(unit="micron")
+    img = _make_deterministic_5d(shape_tzcyx=(1, 1, 2, 4, 4))
+
+    open_in_napari(
+        images=img,
+        metadatas=md,
+        layer_names=["channel 0", "channel 1"],
+        blending="translucent",
+        zarr_mode="numpy",
+        axes_full="TZCYX",
+        returns=False,
+        verbose=False,
+    )
+
+    assert fake_viewer.added[0]["name"] == ["channel 0", "channel 1"]
+    assert fake_viewer.added[0]["blending"] == "translucent"
 
 def test_open_in_napari_raises_on_length_mismatch():
     md = _make_metadata()

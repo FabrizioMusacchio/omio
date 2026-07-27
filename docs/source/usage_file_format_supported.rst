@@ -26,7 +26,7 @@ LSM files directly with ``imread`` as well.
    image_lsm, metadata_lsm = om.imread(fname_lsm)
    print(f"LSM image shape: {image_lsm.shape}")
    pprint.pprint(metadata_lsm)
-   om.open_in_napari(image_lsm, metadata_lsm, fname_lsm)
+   om.open_in_napari(image_lsm, metadata_lsm)
 
 
 .. image:: _static/figures/open_032113-18_in_napari.jpg
@@ -45,7 +45,7 @@ calls the ``read_czi`` function based on the ``czifile`` library.
    image_czi, metadata_czi = om.imread(fname_czi)
    print(f"CZI image shape: {image_czi.shape}")
    pprint.pprint(metadata_czi)
-   om.open_in_napari(image_czi, metadata_czi, fname_czi)
+   om.open_in_napari(image_czi, metadata_czi)
 
 .. image:: _static/figures/open_xt-scan-lsm980_in_napari.jpg
    :target: _static/figures/open_xt-scan-lsm980_in_napari.jpg
@@ -79,7 +79,7 @@ XML file to be present.
    image_raw, metadata_raw = om.imread(fname_raw)
    print(f"Thorlabs RAW image shape: {image_raw.shape}")
    pprint.pprint(metadata_raw)
-   om.open_in_napari(image_raw, metadata_raw, fname_raw)
+   om.open_in_napari(image_raw, metadata_raw)
 
 Output (only the print command):
 
@@ -168,7 +168,7 @@ you can then modify as needed:
                      time_increment=1.0, time_increment_unit="seconds")
 
    image_raw, metadata_raw = om.imread(fname_raw)
-   om.open_in_napari(image_raw, metadata_raw, fname_raw)
+   om.open_in_napari(image_raw, metadata_raw)
 
 Terminal output during reading:
 

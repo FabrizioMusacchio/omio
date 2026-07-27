@@ -318,7 +318,7 @@ array along with the associated OME-compliant metadata:
 
    print(f"Multi-file OME-TIFF image shape: {image_multifile_ometiff.shape}")
    pprint.pprint(metadata_multifile_ometiff)
-   om.open_in_napari(image_multifile_ometiff, metadata_multifile_ometiff, fname_multifile_ometiff)
+   om.open_in_napari(image_multifile_ometiff, metadata_multifile_ometiff)
 
 .. code-block:: text
 

@@ -73,7 +73,7 @@ is created to hold the temporary data:
 
 .. code-block:: python
 
-   om.open_in_napari(image_lazy_memmap, metadata_lazy_memmap, fname)
+   om.open_in_napari(image_lazy_memmap, metadata_lazy_memmap)
 
 .. image:: _static/figures/open_1MP_SIMPLE_Stephan__001_001.tif_in_napari.jpg
    :target: _static/figures/open_1MP_SIMPLE_Stephan__001_001.tif_in_napari.jpg
@@ -179,7 +179,7 @@ Now open the large image in napari without DASK support:
 
 .. code-block:: python
 
-   om.open_in_napari(image_large, metadata_large, fname, zarr_mode="zarr_nodask")
+   om.open_in_napari(image_large, metadata_large, zarr_mode="zarr_nodask")
 
 .. image:: _static/figures/open_Supplementary_Video_4_in_napari.jpg
    :target: _static/figures/open_Supplementary_Video_4_in_napari.jpg
@@ -196,7 +196,7 @@ parallelized re-ordering and writing of the temporary Zarr store:
 
 .. code-block:: python
 
-   om.open_in_napari(image_large, metadata_large, fname, zarr_mode="zarr_dask")
+   om.open_in_napari(image_large, metadata_large, zarr_mode="zarr_dask")
 
 With ``returns=True``, the napari viewer instance, the created napari layers, the used
 Zarr array, and the used axes order are also returned for further programmatic use:
@@ -206,7 +206,6 @@ Zarr array, and the used axes order are also returned for further programmatic u
    napari_viewer, napari_layers, napari_datas, napari_axes = om.open_in_napari(
        image_large,
        metadata_large,
-       fname,
        zarr_mode="zarr_dask",
        returns=True)
 
