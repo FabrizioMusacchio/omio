@@ -103,14 +103,12 @@ dictionary to be fully OME-compliant by moving any non-OME entries under the `"A
 """
 metadata = om.OME_metadata_checkup(metadata)
 pprint.pprint(metadata)
-
 # %% OPEN IN NAPARI AND METADATA MODIFICATION
 """ 
 OMIO comes with built-in support to open images directly in Napari for interactive. Let's
 open the previously read image in Napari:
 """
 om.open_in_napari(image, metadata)
-
 # %% NAPARI LAYER NAMES AND BLENDING
 """
 If `image_name=None` (the default), OMIO derives the Napari layer name from the metadata,
@@ -136,7 +134,6 @@ OMIO function call. For example:
 """
 
 om.open_in_napari(image, metadata, verbose=False)
-
 # %% ENSURED OME-COMPLIANCE UPON READING
 """
 OMIO ensures OME-compliance of the read image and metadata upon reading. This accounts
@@ -216,7 +213,6 @@ image_ometiff, metadata_ometiff = om.imread(fname_ometiff)
 print(f"OME-TIFF Image shape: {image_ometiff.shape} with axes {metadata_ometiff.get('axes', 'N/A')}")
 pprint.pprint(metadata_ometiff)
 om.open_in_napari(image_ometiff, metadata_ometiff)
-
 # %% ENSURED OME-COMPLIANCE UPON WRITING
 """ 
 OMIO's writing function `imwrite` also ensures OME-compliance of the written image
@@ -473,8 +469,6 @@ dataset. You can not simply provide a list of arbitrary TIFF files and expect OM
 assemble them correctly without the required OME metadata, even though the single TIFF files'
 names may contain hints about their position in the series (e.g., Z-slice or time point).
 """
-
-# %% ---------------------------------------------------------
 # %% READ LARGE FILES LAZILY WITH ZARR BACKEND
 """
 OMIO supports reading large image files that do not fit into memory by Zarr-backed lazy loading
@@ -600,7 +594,6 @@ napari_viewer, napari_layers, napari_datas, napari_axes = om.open_in_napari(imag
                                                                             returns=True)
 
 om.cleanup_omio_cache(fname, full_cleanup=True)
-# %% ---------------------------------------------------------
 # %% IMREAD'S FOLDER READING ADN MERGING CAPABILITY
 """ 
 `imread`'s `fname` argument is not restricted to single file names. You can also provide
@@ -724,7 +717,7 @@ output_fnames_folder_stacks = om.imconvert(fname_folder_stacks,
                                            return_fnames=True)
 for ofname in output_fnames_folder_stacks:
     print(f"Converted file name from folder stacks: {ofname}")
-# %% ---------------------------------------------------------
+
 # %% OMIO'S BATCH CONVERSION FUNCTION
 """ 
 OMIO provides a convenience function called `bids_batch_convert` to convert entire
