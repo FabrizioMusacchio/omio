@@ -10,11 +10,11 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
-## 🔜 Not yet released
+## 🚀 OMIO v0.2.3
 
-June 21, 2026
+July 27, 2026
 
-This upcoming maintenance update improves documentation consistency across OMIO's main public API, extends disk-backed template-image workflows, and makes Napari visualization more convenient and customizable.
+This maintenance release improves documentation consistency across OMIO's main public API, extends disk-backed template-image workflows, and makes Napari visualization more convenient and customizable.
 
 ### 📃 Changes
 #### ✨ Added
@@ -69,6 +69,7 @@ This maintenance release adds validated reuse of OMIO's on-disk Zarr caches and 
 * OMIO is now described in a dedicated preprint that can be cited in academic work:
   * DOI: [10.64898/2026.06.09.731118](https://doi.org/10.64898/2026.06.09.731118)
 
+---
 
 ## 🚀 OMIO v0.2.1
 
