@@ -3935,13 +3935,14 @@ def cleanup_omio_cache(fname, full_cleanup=False, verbose=True):
 
     * Full cleanup:
       If ``full_cleanup`` is True, or if ``fname`` points to a directory, the entire
-      ``.omio_cache`` folder under that directory is removed.
+      ``.omio_cache`` folder under that directory is removed. Passing the
+      ``.omio_cache`` folder itself is also supported.
     
     Parameters
     ----------
     fname : str
-        Path to a file whose cache should be removed, or a directory containing an
-        ``.omio_cache`` folder to be cleaned.
+        Path to a file whose cache should be removed, a directory containing an
+        ``.omio_cache`` folder to be cleaned, or the ``.omio_cache`` folder itself.
     full_cleanup : bool, optional
         If True, delete the entire ``.omio_cache`` folder. If False and ``fname`` is a
         file, delete only the cache store corresponding to that file's basename.
@@ -3969,12 +3970,20 @@ def cleanup_omio_cache(fname, full_cleanup=False, verbose=True):
         parent_folder = os.path.dirname(fname)
         base_name = os.path.splitext(os.path.basename(fname))[0]
     elif os.path.isdir(fname):
-        parent_folder = fname
+        fname_norm = os.path.normpath(fname)
+        if os.path.basename(fname_norm) == ".omio_cache":
+            parent_folder = os.path.dirname(fname_norm)
+            omio_cache_folder = fname_norm
+        else:
+            parent_folder = fname
+            omio_cache_folder = os.path.join(parent_folder, ".omio_cache")
         base_name = None
     else:
         raise ValueError(f"cleanup_omio_cache: {fname} is neither a file nor a folder.")
 
-    omio_cache_folder = os.path.join(parent_folder, ".omio_cache")
+    if os.path.isfile(fname):
+        omio_cache_folder = os.path.join(parent_folder, ".omio_cache")
+
     if not os.path.exists(omio_cache_folder):
         if verbose:
             print(f"No .omio_cache folder found in {parent_folder}. Nothing to clean up.")
@@ -4194,8 +4203,8 @@ def create_empty_image(shape: tuple[int, int, int, int, int] = (1, 1, 1, 1, 1),
         a file path, its parent directory is used. Required for `zarr_store="disk"`.
     zarr_store_name : str or None, optional
         Basename used for the on-disk Zarr store when `zarr_store="disk"`. The final
-        store path is ``<parent>/.omio_cache/<zarr_store_name>.zarr``. Required for
-        `zarr_store="disk"`.
+        store path is ``<parent>/.omio_cache/<zarr_store_name>.zarr``. If None,
+        ``"empty_image"`` is used.
     return_metadata : bool, optional
         If True, return a tuple ``(image, metadata)`` where `metadata` is created by
         `create_empty_metadata` and is consistent with `shape`. Default is False.
@@ -4212,7 +4221,10 @@ def create_empty_image(shape: tuple[int, int, int, int, int] = (1, 1, 1, 1, 1),
         The created image container. Returns None if validation fails.
     metadata : dict, optional
         Only returned when `return_metadata` is True. The metadata dictionary is
-        consistent with the created image shape and canonical axes TZCYX.
+        consistent with the created image shape and canonical axes TZCYX. For
+        `zarr_store="disk"`, it also contains ``"omio_cache_folder"``,
+        ``"omio_zarr_store_path"``, and ``"omio_zarr_store_name"`` so users can
+        inspect or clean up the generated cache later.
 
     Notes
     -----
@@ -4220,6 +4232,8 @@ def create_empty_image(shape: tuple[int, int, int, int, int] = (1, 1, 1, 1, 1),
       constant ``_OME_AXES``.
     * For `zarr_store="disk"`, any existing store at the target location is removed
       before creating a new one.
+    * For disk-backed empty images, OMIO metadata and cache information are also
+      stored in the Zarr attributes.
     * Chunking is delegated to `compute_default_chunks`. For very small arrays,
       chunk sizes may match the full dimensions.
     """
@@ -4279,24 +4293,34 @@ def create_empty_image(shape: tuple[int, int, int, int, int] = (1, 1, 1, 1, 1),
                 else:
                     return None
             if zarr_store_name is None:
-                warnings.warn("create_empty_image: for zarr_store='disk', a valid zarr_store_name must be provided.\n"
-                              f"  Got: {zarr_store_name!r}")
-                if return_metadata:
-                    return None, None
-                else:
-                    return None
+                zarr_store_name = "empty_image"
+            zarr_store_name = str(zarr_store_name)
+            if zarr_store_name.endswith(".zarr"):
+                zarr_store_name = zarr_store_name[:-5]
 
+            zarr_store_path = os.fspath(zarr_store_path)
             if os.path.isdir(zarr_store_path):
                 parent_folder = zarr_store_path
-            else:
+            elif os.path.isfile(zarr_store_path):
                 parent_folder = os.path.dirname(zarr_store_path) or "."
                 if verbose:
                     print(f"    zarr_store_path is a file; taking its parent folder:")
                     print(f"    {parent_folder}")
+            else:
+                basename = os.path.basename(os.path.normpath(zarr_store_path))
+                _, ext = os.path.splitext(basename)
+                if ext:
+                    parent_folder = os.path.dirname(zarr_store_path) or "."
+                    if verbose:
+                        print(f"    zarr_store_path looks like a file path; taking its parent folder:")
+                        print(f"    {parent_folder}")
+                else:
+                    parent_folder = zarr_store_path
 
             cache_folder = os.path.join(parent_folder, ".omio_cache")
             os.makedirs(cache_folder, exist_ok=True)
 
+            cache_folder = os.path.abspath(cache_folder)
             zarr_path = os.path.join(cache_folder, zarr_store_name + ".zarr")
             if os.path.exists(zarr_path):
                 shutil.rmtree(zarr_path)
@@ -4311,9 +4335,51 @@ def create_empty_image(shape: tuple[int, int, int, int, int] = (1, 1, 1, 1, 1),
                 z_out[:] = np.asarray(fill_value, dtype=dtype)
 
         if return_metadata:
-            return z_out, create_empty_metadata(shape=shape, input_metadata=input_metadata,
-                                                verbose=verbose)
+            metadata = create_empty_metadata(shape=shape, input_metadata=input_metadata,
+                                             verbose=verbose)
+            if zarr_store == "disk":
+                metadata["omio_cache_folder"] = cache_folder
+                metadata["omio_zarr_store_path"] = zarr_path
+                metadata["omio_zarr_store_name"] = zarr_store_name
+                metadata["omio_zarr_store_type"] = "disk"
+
+                cache_info = {
+                    "schema_version": _CACHE_SCHEMA_VERSION,
+                    "cache_kind": "empty_image",
+                    "creator": "create_empty_image",
+                    "omio_version": _OMIO_VERSION,
+                    "omio_cache_folder": cache_folder,
+                    "zarr_store_path": zarr_path,
+                    "zarr_store_name": zarr_store_name,
+                    "shape": [int(v) for v in shape],
+                    "dtype": str(np.dtype(dtype)),
+                    "chunks": [int(v) for v in chunks],
+                    "fill_value": _jsonify_for_storage(fill_value),
+                }
+                _write_disk_cache_payload(z_out, metadata, cache_info, verbose=verbose)
+            return z_out, metadata
         else:
+            if zarr_store == "disk":
+                metadata = create_empty_metadata(shape=shape, input_metadata=input_metadata,
+                                                 verbose=verbose)
+                metadata["omio_cache_folder"] = cache_folder
+                metadata["omio_zarr_store_path"] = zarr_path
+                metadata["omio_zarr_store_name"] = zarr_store_name
+                metadata["omio_zarr_store_type"] = "disk"
+                cache_info = {
+                    "schema_version": _CACHE_SCHEMA_VERSION,
+                    "cache_kind": "empty_image",
+                    "creator": "create_empty_image",
+                    "omio_version": _OMIO_VERSION,
+                    "omio_cache_folder": cache_folder,
+                    "zarr_store_path": zarr_path,
+                    "zarr_store_name": zarr_store_name,
+                    "shape": [int(v) for v in shape],
+                    "dtype": str(np.dtype(dtype)),
+                    "chunks": [int(v) for v in chunks],
+                    "fill_value": _jsonify_for_storage(fill_value),
+                }
+                _write_disk_cache_payload(z_out, metadata, cache_info, verbose=verbose)
             return z_out
 
 # function to update metadata from image shape and axes:

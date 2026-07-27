@@ -10,6 +10,32 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
+## 🔜 Not yet released
+
+June 21, 2026
+
+This upcoming maintenance update improves documentation consistency across OMIO's main public API by aligning the docstring return and exception sections of several core functions.
+
+### 📃 Changes
+#### ✨ Added
+* Extended `create_empty_image` for disk-backed Zarr workflows via `zarr_store="disk"` together with `zarr_store_path`.
+* Disk-backed empty images now record `omio_cache_folder`, `omio_zarr_store_path`, `omio_zarr_store_name`, and `omio_zarr_store_type` in the returned metadata.
+* Disk-backed empty-image Zarr stores now persist OMIO metadata and cache information in their Zarr attributes.
+
+#### 🧩 Changed
+* `create_empty_image(..., zarr_store="disk")` now uses `zarr_store_name="empty_image"` when no explicit store name is provided.
+* `cleanup_omio_cache` can now remove a directly provided `.omio_cache` folder, enabling cleanup via `om.cleanup_omio_cache(my_metadata["omio_cache_folder"], full_cleanup=True)`.
+
+#### 📚 Documentation
+* Harmonized the `Parameters`/`Returns`/`Raises` docstring layout of `imread`, `read_thorlabs_raw`, `imconvert`, and `bids_batch_convert` with OMIO's primary documentation style used by functions such as `imwrite` and `cleanup_omio_cache`.
+* Clarified return-value descriptions for high-level reader and conversion functions to make the generated API reference more uniform and easier to scan.
+* Added tutorial coverage for creating empty OMIO arrays directly as on-disk Zarr stores and cleaning them up via metadata-recorded cache paths.
+
+#### 🧪 Testing and robustness
+* Added regression tests for disk-backed empty-image metadata, persisted Zarr attributes, default store naming, and cache cleanup using the metadata-provided cache folder.
+
+---
+
 ## 🚀 OMIO v0.2.2
 
 June 12, 2026

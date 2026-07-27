@@ -122,6 +122,11 @@ If the source file changed, or if relevant settings such as explicit physical pi
 size overrides no longer match, OMIO automatically falls back to rebuilding the cache
 from the original image instead of reusing a stale store.
 
+The same ``.omio_cache`` convention is also used when creating empty disk-backed
+arrays with ``create_empty_image(..., zarr_store="disk")``. In that case, OMIO records
+``omio_cache_folder`` and ``omio_zarr_store_path`` in the returned metadata so the
+generated store can be inspected or cleaned up later.
+
 There is intentionally no automatic cleanup of the temporary Zarr stores, as users may
 want to reuse them for downstream processing. To manually clean up the temporary Zarr 
 stores created by OMIO, use:

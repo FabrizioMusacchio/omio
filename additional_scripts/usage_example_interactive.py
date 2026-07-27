@@ -848,6 +848,35 @@ om.imwrite(os.path.join(pathname_save, "my_empty_image_filled.ome.tif"), my_imag
 read_my_image, read_my_metadata = om.imread(os.path.join(pathname_save, "my_empty_image_filled.ome.tif"))
 om.open_in_napari(read_my_image, read_my_metadata, os.path.join(pathname_save, "my_empty_image_filled.ome.tif"))
 
+# %% CREATE AN EMPTY IMAGE DIRECTLY AS AN ON-DISK ZARR ARRAY
+"""
+For larger synthetic or preallocated datasets, you can create the empty image directly
+as an on-disk Zarr array. OMIO creates the store inside `.omio_cache` below the provided
+`zarr_store_path` and records the cache paths in the returned metadata.
+"""
+
+zarr_parent = "../example_data/custom_created_images/"
+my_zarr_image, my_zarr_metadata = om.create_empty_image(
+    shape=(5, 20, 2, 512, 512),
+    dtype=np.uint16,
+    zarr_store="disk",
+    zarr_store_path=zarr_parent,
+    zarr_store_name="my_empty_image_zarr",
+    return_metadata=True)
+
+print(f"Created disk-backed Zarr image with shape: {my_zarr_image.shape}")
+print(f"Zarr store path: {my_zarr_metadata['omio_zarr_store_path']}")
+print(f"OMIO cache folder: {my_zarr_metadata['omio_cache_folder']}")
+
+# Fill a few planes without holding a second full copy in RAM:
+for t in range(my_zarr_image.shape[0]):
+    for z in range(my_zarr_image.shape[1]):
+        for c in range(my_zarr_image.shape[2]):
+            my_zarr_image[t, z, c, :, :] = t * 100 + z * 10 + c
+
+# When you no longer need the on-disk Zarr store, remove the cache via the metadata path:
+om.cleanup_omio_cache(my_zarr_metadata["omio_cache_folder"], full_cleanup=True)
+
 """ 
 When changing the image shape, e.g., by cropping or padding, 
 """
@@ -865,4 +894,3 @@ om.imwrite(os.path.join(pathname_save, "my_cropped_image.ome.tif"), my_cropped_i
 read_my_cropped_image, read_my_cropped_metadata = om.imread(os.path.join(pathname_save, "my_cropped_image.ome.tif"))
 om.open_in_napari(read_my_cropped_image, read_my_cropped_metadata, os.path.join(pathname_save, "my_cropped_image.ome.tif"))
 # %% END
-

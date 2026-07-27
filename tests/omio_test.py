@@ -3591,16 +3591,17 @@ def test_create_empty_image_zarr_disk_requires_path_warns_and_returns_none(tmp_p
         )
     assert img is None
 
-def test_create_empty_image_zarr_disk_requires_name_warns_and_returns_none(tmp_path):
-    with pytest.warns(UserWarning):
-        img = create_empty_image(
-            shape=(1, 1, 1, 2, 2),
-            zarr_store="disk",
-            zarr_store_path=str(tmp_path),
-            zarr_store_name=None,
-            verbose=False,
-        )
-    assert img is None
+def test_create_empty_image_zarr_disk_uses_default_name_when_omitted(tmp_path):
+    img = create_empty_image(
+        shape=(1, 1, 1, 2, 2),
+        zarr_store="disk",
+        zarr_store_path=str(tmp_path),
+        zarr_store_name=None,
+        verbose=False,
+    )
+
+    assert isinstance(img, zarr.core.array.Array)
+    assert (tmp_path / ".omio_cache" / "empty_image.zarr").exists()
 
 def test_create_empty_image_zarr_disk_creates_cache_under_directory(tmp_path):
     shape = (1, 1, 1, 3, 4)
@@ -3637,7 +3638,7 @@ def test_create_empty_image_zarr_disk_path_can_be_file_uses_parent_folder(tmp_pa
     )
 
     out = capsys.readouterr().out
-    assert "zarr_store_path is a file; taking its parent folder" in out
+    assert "zarr_store_path looks like a file path; taking its parent folder" in out
 
     cache_dir = tmp_path / ".omio_cache"
     assert (cache_dir / "from_file_parent.zarr").exists()
@@ -3665,6 +3666,36 @@ def test_create_empty_image_zarr_disk_overwrites_existing_store(tmp_path):
         verbose=False,
     )
     assert np.all(np.asarray(img2[:]) == 0)
+
+def test_create_empty_image_zarr_disk_metadata_contains_cache_paths_and_cleanup_works(tmp_path):
+    shape = (1, 2, 1, 3, 4)
+    img, md = create_empty_image(
+        shape=shape,
+        dtype=np.uint8,
+        zarr_store="disk",
+        zarr_store_path=str(tmp_path),
+        zarr_store_name="metadata_cache",
+        fill_value=4,
+        return_metadata=True,
+        verbose=False,
+    )
+
+    cache_dir = tmp_path / ".omio_cache"
+    zarr_path = cache_dir / "metadata_cache.zarr"
+
+    assert isinstance(img, zarr.core.array.Array)
+    assert zarr_path.exists()
+    assert md["omio_cache_folder"] == str(cache_dir)
+    assert md["omio_zarr_store_path"] == str(zarr_path)
+    assert md["omio_zarr_store_name"] == "metadata_cache"
+    assert md["omio_zarr_store_type"] == "disk"
+    assert img.attrs["omio_metadata"]["omio_cache_folder"] == str(cache_dir)
+    assert img.attrs["omio_cache_info"]["cache_kind"] == "empty_image"
+    assert img.attrs["omio_cache_info"]["creator"] == "create_empty_image"
+    assert np.all(np.asarray(img[:]) == 4)
+
+    cleanup_omio_cache(md["omio_cache_folder"], full_cleanup=True, verbose=False)
+    assert not cache_dir.exists()
 
 def test_create_empty_image_return_metadata_for_zarr_memory():
     shape = (2, 1, 1, 3, 3)
