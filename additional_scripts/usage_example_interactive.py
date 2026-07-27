@@ -135,7 +135,6 @@ om.open_in_napari(image, metadata)
 If you don't want to see terminal outputs from OMIO, you can set `verbose=False` in any
 OMIO function call. For example:
 """
-
 om.open_in_napari(image, metadata, verbose=False)
 
 om.open_in_napari(image, metadata, verbose=False, 
@@ -143,9 +142,11 @@ om.open_in_napari(image, metadata, verbose=False,
                   blending="additive")
 
 om.open_in_napari(image, metadata, verbose=False, 
-                  image_name="custom display name",
+                  image_name="my image",
                   layer_names=["channel 0", "channel 1", "channel 2"], 
                   blending="additive")
+
+
 # %% ENSURED OME-COMPLIANCE UPON READING
 """
 OMIO ensures OME-compliance of the read image and metadata upon reading. This accounts
