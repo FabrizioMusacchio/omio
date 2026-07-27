@@ -267,15 +267,17 @@ or OME-TIFF metadata.
    pprint.pprint(metadata_5d)
    om.open_in_napari(image_5d, metadata_5d)
 
-For multichannel data, channel layers can be named explicitly. OMIO opens Napari
-layers with ``blending="additive"`` by default, but you can pass any Napari-supported
-blending mode:
+For multichannel data, channel layers can be named explicitly. OMIO prefixes these
+names with the resolved image name, either from ``image_name`` or from the metadata.
+OMIO opens Napari layers with ``blending="additive"`` by default, but you can pass
+any Napari-supported blending mode:
 
 .. code-block:: python
 
    om.open_in_napari(
        image_5d,
        metadata_5d,
+       image_name="TZCYX demo",
        layer_names=["channel 0", "channel 1"],
        blending="additive")
 

@@ -5449,8 +5449,37 @@ def test_open_in_napari_layer_names_and_blending_are_forwarded(monkeypatch):
         verbose=False,
     )
 
-    assert fake_viewer.added[0]["name"] == ["channel 0", "channel 1"]
+    assert fake_viewer.added[0]["name"] == ["metadata_name channel 0", "metadata_name channel 1"]
     assert fake_viewer.added[0]["blending"] == "translucent"
+
+def test_open_in_napari_prefixes_layer_names_with_explicit_image_name(monkeypatch):
+    import omio.omio as m
+
+    fake_viewer = FakeViewer()
+    monkeypatch.setattr(m.napari, "current_viewer", lambda: fake_viewer)
+    monkeypatch.setattr(m.napari, "Viewer", lambda: FakeViewer())
+
+    md = _make_metadata(unit="micron")
+    img = _make_deterministic_5d(shape_tzcyx=(1, 1, 3, 4, 4))
+
+    open_in_napari(
+        images=img,
+        metadatas=md,
+        image_name="custom display name",
+        layer_names=["channel 0", "channel 1", "channel 2"],
+        blending="additive",
+        zarr_mode="numpy",
+        axes_full="TZCYX",
+        returns=False,
+        verbose=False,
+    )
+
+    assert fake_viewer.added[0]["name"] == [
+        "custom display name channel 0",
+        "custom display name channel 1",
+        "custom display name channel 2",
+    ]
+    assert fake_viewer.added[0]["blending"] == "additive"
 
 def test_open_in_napari_raises_on_length_mismatch():
     md = _make_metadata()

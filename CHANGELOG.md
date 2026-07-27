@@ -10,6 +10,24 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
+## 🚀 OMIO v0.2.4
+
+July 27, 2026
+
+This small follow-up release refines Napari layer naming so custom channel names remain grouped under the resolved image name.
+
+### 📃 Changes
+#### 🧩 Changed
+* `open_in_napari(..., layer_names=[...])` now prefixes custom channel/layer names with the resolved image name, keeping layer lists grouped and readable in Napari.
+
+#### 📚 Documentation
+* Updated Napari examples in the interactive tutorial and Read the Docs pages to show image-name-prefixed per-channel `layer_names`.
+
+#### 🧪 Testing and robustness
+* Added regression coverage for custom `layer_names` together with explicit `image_name` and metadata-derived image names.
+
+---
+
 ## 🚀 OMIO v0.2.3
 
 July 27, 2026

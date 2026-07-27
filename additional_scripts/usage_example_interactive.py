@@ -114,7 +114,8 @@ om.open_in_napari(image, metadata)
 If `image_name=None` (the default), OMIO derives the Napari layer name from the metadata,
 for example from `metadata["Annotations"]["original_filename"]`. You can still override
 the display name explicitly. Multichannel data can also receive per-channel layer names,
-and OMIO opens layers with additive blending by default.
+which OMIO prefixes with the resolved image name. OMIO opens layers with additive
+blending by default.
 """
 om.open_in_napari(image, metadata, image_name="custom display name")
 
@@ -134,6 +135,15 @@ OMIO function call. For example:
 """
 
 om.open_in_napari(image, metadata, verbose=False)
+
+om.open_in_napari(image, metadata, verbose=False, 
+                  layer_names=["channel 0", "channel 1", "channel 2"], 
+                  blending="additive")
+
+om.open_in_napari(image, metadata, verbose=False, 
+                  image_name="custom display name",
+                  layer_names=["channel 0", "channel 1", "channel 2"], 
+                  blending="additive")
 # %% ENSURED OME-COMPLIANCE UPON READING
 """
 OMIO ensures OME-compliance of the read image and metadata upon reading. This accounts

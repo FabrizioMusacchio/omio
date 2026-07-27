@@ -5330,6 +5330,19 @@ def _derive_napari_layer_name(metadata: dict, image_name: Union[None, str] = Non
         return _strip_image_extension(str(image_name))
     return _derive_image_name_from_metadata(metadata)
 
+def _prefix_napari_layer_names(image_base_name: str,
+                               layer_names: Union[None, str, list[str], tuple[str, ...]] = None):
+    """
+    Prefix optional Napari layer/channel names with the image display name.
+    """
+    if layer_names is None:
+        return image_base_name
+    if isinstance(layer_names, str):
+        return f"{image_base_name} {layer_names}"
+    if isinstance(layer_names, (list, tuple)):
+        return [f"{image_base_name} {name}" for name in layer_names]
+    return layer_names
+
 def _derive_napari_cache_anchor(image,
                                 metadata: dict,
                                 image_name: Union[None, str] = None,
@@ -5432,9 +5445,10 @@ def _single_image_open_in_napari(
         Explicit layer name to use. This legacy argument is kept for internal
         compatibility. If provided, it takes precedence over `image_name`.
     layer_names : str, list of str, or None, optional
-        Explicit Napari layer name(s). A string names the added image layer. A list
-        is passed through to Napari, which is useful for naming channel layers when
-        `channel_axis` is present. Default is None.
+        Optional layer or channel suffix name(s). The resolved image name is
+        prepended automatically. For example, ``image_name="sample"`` and
+        ``layer_names=["channel 0", "channel 1"]`` become
+        ``["sample channel 0", "sample channel 1"]`` in Napari. Default is None.
     blending : str, optional
         Napari blending mode forwarded to ``viewer.add_image``. Default is
         ``"additive"``.
@@ -5572,12 +5586,11 @@ def _single_image_open_in_napari(
             viewer = napari.Viewer()
 
     # build layer name:
-    if layer_names is not None:
-        layer_name = layer_names
-    elif viewer_name is not None:
+    if viewer_name is not None:
         layer_name = viewer_name
     else:
-        layer_name = _derive_napari_layer_name(metadata, image_name=image_name)
+        image_base_name = _derive_napari_layer_name(metadata, image_name=image_name)
+        layer_name = _prefix_napari_layer_names(image_base_name, layer_names=layer_names)
     
     # convert napari_data into a dask-array if it's a Zarr (napari handles zarr dask arrays better):
     if isinstance(napari_data, zarr.core.array.Array):
@@ -5650,11 +5663,11 @@ def open_in_napari(images: Union[np.ndarray, "zarr.core.array.Array", list[Union
         If True, return detailed objects (viewer, layers, napari_datas, napari_axess).
         If False, the function returns None. Default is False.
     layer_names : str, list of str, list of list of str, or None, optional
-        Explicit Napari layer name(s). A string names the layer for a single image
-        or acts as a base name for multiple images. For one image with a channel
-        axis, a list of strings is passed to Napari to name the channel layers. For
-        multiple images, a list matching the number of images names each image
-        layer. Default is None.
+        Optional layer or channel suffix name(s). The resolved image name is
+        prepended automatically. For one image with a channel axis, a list of
+        strings names the channel layers below the image name. For multiple images,
+        a list matching the number of images can provide one suffix per image.
+        Default is None.
     blending : str, optional
         Napari blending mode forwarded to ``viewer.add_image``. Default is
         ``"additive"``.
