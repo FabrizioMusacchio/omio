@@ -71,6 +71,27 @@ is created to hold the temporary data:
 
    <Array file://example_data/tif_large_Ca_imaging_large/.omio_cache/1MP_SIMPLE_Stephan__001_001.zarr shape=(1, 2000, 1, 355, 350) dtype=uint16>
 
+If the source file is stored on a server, external drive, or any other slower/shared
+location, you can keep OMIO's disk-backed Zarr cache somewhere else, for example on a
+fast local SSD. Pass ``zarr_store_path`` to define the parent directory in which OMIO
+creates ``.omio_cache``:
+
+.. code-block:: python
+
+   local_cache_root = "/Users/me/omio_local_cache" # absolute path
+   #local_cache_root = "omio_caches"               # path relative to the current working directory
+
+   image_local_cache, metadata_local_cache = om.imread(
+       fname,
+       zarr_store="disk",
+       zarr_store_path=local_cache_root)
+
+   print(metadata_local_cache["omio_cache_folder"])
+   print(metadata_local_cache["omio_zarr_store_path"])
+
+You can open any of the above lazy-loaded images in napari as you would
+do with any other OMIO read image:
+
 .. code-block:: python
 
    om.open_in_napari(image_lazy_memmap, metadata_lazy_memmap)
@@ -80,10 +101,12 @@ is created to hold the temporary data:
    :alt: Screenshot of large TIFF opened in napari
 
 
-Note that if you have opened an image with napari in the same interactive session before,
-OMIO will reuse the existing napari viewer instance to avoid opening multiple windows.
-In practice, any new image opened with ``om.open_in_napari`` will be added as a new layer
-to the existing napari viewer.
+.. note::
+
+   If you have opened an image with napari in the same interactive session before,
+   OMIO will reuse the existing napari viewer instance to avoid opening multiple windows.
+   In practice, any new image opened with ``om.open_in_napari`` will be added as a new layer
+   to the existing napari viewer.
 
 Reuse an existing on-disk OMIO cache
 ------------------------------------
@@ -115,6 +138,25 @@ settings before reusing the cache.
    print(f"Second read shape: {image_cache_2.shape}, axes: {metadata_cache_2.get('axes', 'N/A')}")
    print(image_cache_2.attrs["omio_cache_info"]["source_path"])
 
+If the cache was created in a custom location via ``zarr_store_path``, pass the same
+``zarr_store_path`` again when reusing the cache. This tells OMIO where to look for
+the validated ``.omio_cache/<basename>.zarr`` store:
+
+.. code-block:: python
+
+   local_cache_root = "/Users/me/omio_local_cache"
+
+   image_cache_1, metadata_cache_1 = om.imread(
+       fname,
+       zarr_store="disk",
+       zarr_store_path=local_cache_root)
+
+   image_cache_2, metadata_cache_2 = om.imread(
+       fname,
+       zarr_store="disk",
+       zarr_store_path=local_cache_root,
+       reuse_disk_cache=True)
+
 If the source file changed, or if relevant settings such as explicit physical pixel
 size overrides no longer match, OMIO automatically falls back to rebuilding the cache
 from the original image instead of reusing a stale store.
@@ -123,6 +165,20 @@ The same ``.omio_cache`` convention is also used when creating empty disk-backed
 arrays with ``create_empty_image(..., zarr_store="disk")``. In that case, OMIO records
 ``omio_cache_folder`` and ``omio_zarr_store_path`` in the returned metadata so the
 generated store can be inspected or cleaned up later.
+
+For caches created in a custom location, you can remove the complete cache folder using
+the path recorded in the returned metadata:
+
+.. code-block:: python
+
+   om.cleanup_omio_cache(metadata_cache_1["omio_cache_folder"], full_cleanup=True)
+
+or provide the cache folder path directly:
+
+.. code-block:: python
+
+   om.cleanup_omio_cache(local_cache_root, full_cleanup=True)
+
 
 There is intentionally no automatic cleanup of the temporary Zarr stores, as users may
 want to reuse them for downstream processing. To manually clean up the temporary Zarr 

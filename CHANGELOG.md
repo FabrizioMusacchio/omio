@@ -10,6 +10,29 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
+## 🔜 Not yet released
+
+July 28, 2026
+
+This upcoming maintenance update adds configurable on-disk cache locations for `imread` workflows.
+
+### 📃 Changes
+#### ✨ Added
+* Added `zarr_store_path` to `imread` and the underlying TIFF, CZI, and Thorlabs RAW readers.
+* `imread(..., zarr_store="disk", zarr_store_path=<path>)` now creates `.omio_cache` under the provided path instead of next to the source file.
+* Disk-cache metadata returned by `imread` now records `omio_cache_folder`, `omio_zarr_store_path`, `omio_zarr_store_name`, and `omio_zarr_store_type` for disk-backed reads.
+
+#### 🧩 Changed
+* `reuse_disk_cache=True` now checks the custom `zarr_store_path` location when one is provided, enabling reuse of local caches for source files stored on a server or external drive.
+
+#### 📚 Documentation
+* Added an interactive tutorial example showing how to create and reuse a local OMIO disk cache via `zarr_store_path`.
+
+#### 🧪 Testing and robustness
+* Added regression tests for custom `zarr_store_path` cache creation and reuse through both `read_tif` and public `imread`.
+
+---
+
 ## 🚀 OMIO v0.2.4
 
 July 27, 2026

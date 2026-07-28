@@ -2061,6 +2061,27 @@ def test_read_tif_zarr_disk_creates_cache_and_returns_zarr_array(tmp_path):
     assert cache.exists()
     assert any(p.suffix == ".zarr" for p in cache.iterdir())
 
+def test_read_tif_zarr_disk_uses_custom_zarr_store_path(tmp_path):
+    src_dir = tmp_path / "server_source"
+    local_cache_root = tmp_path / "local_cache"
+    src_dir.mkdir()
+    f = src_dir / "plain.tif"
+    tifffile.imwrite(f, np.zeros((6, 8), dtype=np.uint16))
+
+    image, md = read_tif(
+        str(f),
+        zarr_store="disk",
+        zarr_store_path=str(local_cache_root),
+        verbose=False)
+
+    expected_store = local_cache_root / ".omio_cache" / "plain.zarr"
+    assert isinstance(image, zarr.core.array.Array)
+    assert expected_store.exists()
+    assert not (src_dir / ".omio_cache").exists()
+    assert md["omio_cache_folder"] == str(local_cache_root / ".omio_cache")
+    assert md["omio_zarr_store_path"] == str(expected_store)
+    assert image.attrs["omio_metadata"]["omio_zarr_store_path"] == str(expected_store)
+
 def test_read_tif_zarr_disk_persists_metadata_and_cache_info_in_zarr_json(tmp_path):
     f = tmp_path / "plain.tif"
     tifffile.imwrite(f, np.zeros((6, 8), dtype=np.uint16))
@@ -2094,6 +2115,37 @@ def test_read_tif_reuse_disk_cache_avoids_reopening_original_file(tmp_path, monk
     assert isinstance(image2, zarr.core.array.Array)
     assert tuple(image2.shape) == tuple(image1.shape)
     assert md2["axes"] == md1["axes"]
+    assert np.array_equal(np.asarray(image2), np.asarray(image1))
+
+def test_read_tif_reuse_disk_cache_uses_custom_zarr_store_path(tmp_path, monkeypatch):
+    src_dir = tmp_path / "server_source"
+    local_cache_root = tmp_path / "local_cache"
+    src_dir.mkdir()
+    f = src_dir / "plain.tif"
+    tifffile.imwrite(f, np.arange(6 * 8, dtype=np.uint16).reshape(6, 8))
+
+    image1, md1 = read_tif(
+        str(f),
+        zarr_store="disk",
+        zarr_store_path=str(local_cache_root),
+        verbose=False)
+
+    def fail_tiff_open(*args, **kwargs):
+        raise AssertionError("Original TIFF should not be reopened when reuse_disk_cache=True")
+
+    monkeypatch.setattr("tifffile.TiffFile", fail_tiff_open)
+
+    image2, md2 = read_tif(
+        str(f),
+        zarr_store="disk",
+        zarr_store_path=str(local_cache_root),
+        reuse_disk_cache=True,
+        verbose=False)
+
+    assert isinstance(image2, zarr.core.array.Array)
+    assert tuple(image2.shape) == tuple(image1.shape)
+    assert md2["axes"] == md1["axes"]
+    assert md2["omio_zarr_store_path"] == str(local_cache_root / ".omio_cache" / "plain.zarr")
     assert np.array_equal(np.asarray(image2), np.asarray(image1))
 
 def test_read_tif_reuse_disk_cache_falls_back_when_cache_has_no_omio_payload(tmp_path):
@@ -3967,6 +4019,41 @@ def test_imread_single_tif_zarr_memory_returns_zarr_array(tmp_path):
     assert hasattr(img, "shape") and hasattr(img, "dtype")
     assert isinstance(img, zarr.core.array.Array)
     assert img.shape[-2:] == arr.shape
+
+def test_imread_zarr_disk_uses_custom_zarr_store_path_and_reuses_cache(tmp_path, monkeypatch):
+    src_dir = tmp_path / "server_source"
+    local_cache_root = tmp_path / "local_cache"
+    src_dir.mkdir()
+    f = src_dir / "zarr_disk.tif"
+    tifffile.imwrite(str(f), np.arange(6 * 8, dtype=np.uint16).reshape(6, 8))
+
+    img1, md1 = imread(
+        str(f),
+        zarr_store="disk",
+        zarr_store_path=str(local_cache_root),
+        verbose=False)
+
+    expected_store = local_cache_root / ".omio_cache" / "zarr_disk.zarr"
+    assert isinstance(img1, zarr.core.array.Array)
+    assert expected_store.exists()
+    assert not (src_dir / ".omio_cache").exists()
+    assert md1["omio_zarr_store_path"] == str(expected_store)
+
+    def fail_tiff_open(*args, **kwargs):
+        raise AssertionError("Original TIFF should not be reopened when reuse_disk_cache=True")
+
+    monkeypatch.setattr("tifffile.TiffFile", fail_tiff_open)
+
+    img2, md2 = imread(
+        str(f),
+        zarr_store="disk",
+        zarr_store_path=str(local_cache_root),
+        reuse_disk_cache=True,
+        verbose=False)
+
+    assert isinstance(img2, zarr.core.array.Array)
+    assert md2["omio_zarr_store_path"] == str(expected_store)
+    assert np.array_equal(np.asarray(img2), np.asarray(img1))
 
 def test_imread_folder_stacks_missing_tag_underscore_aborts(tmp_path):
     # folder name without "_" should abort in folder_stacks mode

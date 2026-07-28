@@ -521,12 +521,20 @@ any new image opened with `om.open_in_napari` will be added as a new layer to th
 Napari viewer.
 """
 
+""" 
+You can also define the location of the temporary Zarr store by providing the 
+`zarr_store_path` argument:
+"""
+cache_store = "tmp_cache_folder" # targets the folder from where this script is run
+image_lazy_memmap, metadata_lazy_memmap = om.imread(fname, zarr_store="disk", zarr_store_path=cache_store)
+
+
 # There is by intention no automatic cleanup of the temporary Zarr stores (the user
 # may want to reuse them for any downstream processing). To manually cleanup the
 # temporary Zarr stores created by OMIO, use the following function:
 om.cleanup_omio_cache(fname, full_cleanup=False)  # set full_cleanup=True to remove the entire .omio_cache folder
 om.cleanup_omio_cache(fname, full_cleanup=True)
-
+om.cleanup_omio_cache(cache_store, full_cleanup=True)
 # %% EFFICIENTLY VIEW LARGE IMAGES IN NAPARI WITH OMIO'S DASK SUPPORT
 """
 To efficiently view large images in Napari without loading the entire dataset into memory,
@@ -560,6 +568,38 @@ print(f"Stored cache info keys: {list(image_cache_1.attrs['omio_cache_info'].key
 image_cache_2, metadata_cache_2 = om.imread(fname, zarr_store="disk", reuse_disk_cache=True)
 print(f"Second read shape: {image_cache_2.shape}, axes: {metadata_cache_2.get('axes', 'N/A')}")
 print(f"Reused cache for source: {image_cache_2.attrs['omio_cache_info']['source_path']}")
+
+"""
+Again, if the source file lives on a server or external drive, you can keep OMIO's disk-backed
+Zarr cache somewhere else, for example on a fast local SSD. In that case, pass
+`zarr_store_path`; OMIO will create `.omio_cache` inside that folder. For later reuse,
+pass the same `zarr_store_path` again so OMIO knows where to look.
+"""
+local_cache_root = "../example_data/local_omio_cache_example" # relative path to the folder from where this script is run
+                                                              # you can also use an absolute path here.
+# house-keeping: clean up any existing cache store at local_cache_root to start fresh:
+om.cleanup_omio_cache(local_cache_root, full_cleanup=True)
+""" 
+Alternatively, you can also clean up the cache store for a specific file by providing the
+file name instead of the folder name:
+
+local_cache_folder = os.path.join(local_cache_root, ".omio_cache") 
+local_cache_store  = os.path.join(local_cache_folder, os.path.splitext(os.path.basename(fname))[0] + ".zarr",)
+if os.path.exists(local_cache_folder):
+    om.cleanup_omio_cache(local_cache_folder, full_cleanup=True) 
+"""
+
+image_local_cache_1, metadata_local_cache_1 = om.imread(fname, zarr_store="disk", zarr_store_path=local_cache_root)
+print(f"Local cache created: {os.path.exists(local_cache_root)} at {local_cache_root}")
+print(f"Metadata cache folder: {metadata_local_cache_1['omio_cache_folder']}")
+
+# now reuse the existing local cache store instead of rebuilding it:
+image_local_cache_2, metadata_local_cache_2 = om.imread(
+    fname,
+    zarr_store="disk",
+    zarr_store_path=local_cache_root,
+    reuse_disk_cache=True)
+print(f"Reused local cache: {metadata_local_cache_2['omio_zarr_store_path']}")
 
 
 # ANOTHER EXAMPLE: this file is 1.1 GB 3D stacks with multiple channels:
