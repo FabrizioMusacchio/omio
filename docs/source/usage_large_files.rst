@@ -90,9 +90,7 @@ Reuse an existing on-disk OMIO cache
 
 If you repeatedly open the same large file with ``zarr_store="disk"``, OMIO can reuse
 an already existing, validated cache store instead of rebuilding it from the original
-image each time. This is useful for iterative interactive work on large files.
-
-When OMIO creates a disk-backed cache, it also stores the OMIO metadata and a cache
+image each time. This is useful for iterative interactive work on large files. When OMIO creates a disk-backed cache, it also stores the OMIO metadata and a cache
 manifest directly in the Zarr attributes. On later reads, ``reuse_disk_cache=True``
 instructs OMIO to validate that manifest against the current source file and read
 settings before reusing the cache.
@@ -101,20 +99,19 @@ settings before reusing the cache.
 
    fname = "example_data/tif_files_from_3P_paper/Supplementary_Video_4.tif"
 
-   # Start from a clean state so the first call definitely builds the cache:
+   # start from a clean state so the first call definitely builds the cache:
    om.cleanup_omio_cache(fname, full_cleanup=False)
 
-   # First call: creates .omio_cache/<basename>.zarr and stores OMIO cache metadata in it.
+   # first call: creates .omio_cache/<basename>.zarr and stores OMIO cache metadata in it.
    image_cache_1, metadata_cache_1 = om.imread(fname, zarr_store="disk")
    print(f"First read shape: {image_cache_1.shape}, axes: {metadata_cache_1.get('axes', 'N/A')}")
    print(image_cache_1.attrs["omio_cache_info"])
 
-   # Second call: reuses the existing validated disk cache instead of rebuilding it.
+   # second call: reuses the existing validated disk cache instead of rebuilding it.
    image_cache_2, metadata_cache_2 = om.imread(
        fname,
        zarr_store="disk",
-       reuse_disk_cache=True,
-   )
+       reuse_disk_cache=True)
    print(f"Second read shape: {image_cache_2.shape}, axes: {metadata_cache_2.get('axes', 'N/A')}")
    print(image_cache_2.attrs["omio_cache_info"]["source_path"])
 
