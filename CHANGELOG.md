@@ -10,11 +10,11 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
-## 🔜 Not yet released
+## 🚀 OMIO v0.2.5
 
 July 28, 2026
 
-This upcoming maintenance update adds configurable on-disk cache locations for `imread` workflows.
+This maintenance release adds configurable on-disk cache locations for `imread` workflows.
 
 ### 📃 Changes
 #### ✨ Added
