@@ -528,6 +528,31 @@ You can also define the location of the temporary Zarr store by providing the
 cache_store = "tmp_cache_folder" # targets the folder from where this script is run
 image_lazy_memmap, metadata_lazy_memmap = om.imread(fname, zarr_store="disk", zarr_store_path=cache_store)
 
+"""
+Disk-backed Zarr arrays can also be written back to OME-TIFF with `imwrite`.
+For Zarr inputs, OMIO streams the data plane by plane into `tifffile.imwrite`
+instead of converting the entire Zarr store to one large NumPy array first.
+
+This keeps OME-TIFF export memory-aware for large disk-cached workflows. The
+written OME-TIFF still uses OMIO's established writer axis layout internally,
+and reading it again with `om.imread` returns canonical `TZCYX` data.
+"""
+fnames_zarr_written = om.imwrite(
+    fname,
+    image_lazy_memmap,
+    metadata_lazy_memmap,
+    relative_path="omio_zarr_write_example",
+    overwrite=True,
+    return_fnames=True,
+    verbose=True)
+
+print(f"Zarr-backed OME-TIFF written to: {fnames_zarr_written[0]}")
+
+# Optional roundtrip check: OMIO reads the written file back as canonical TZCYX.
+image_zarr_roundtrip, metadata_zarr_roundtrip = om.imread(fnames_zarr_written[0], verbose=False)
+print(f"Roundtrip axes: {metadata_zarr_roundtrip['axes']}")
+print(f"Roundtrip shape: {image_zarr_roundtrip.shape}")
+
 
 # There is by intention no automatic cleanup of the temporary Zarr stores (the user
 # may want to reuse them for any downstream processing). To manually cleanup the

@@ -4800,6 +4800,130 @@ def _normalize_axes_for_ometiff(image, axes):
             f"does not fit to arr.ndim={arr.ndim}"
         )
     return arr, axes
+
+
+def _normalize_axes_shape_for_ometiff(shape, axes):
+    """
+    Normalize an axis declaration for OME-TIFF writing without reading image data.
+
+    This is the shape-only counterpart to ``_normalize_axes_for_ometiff``. It is
+    used for Zarr-backed inputs where converting the full array to NumPy would
+    defeat the purpose of disk-backed workflows.
+    """
+    shape = tuple(shape)
+    if len(axes) != len(shape):
+        raise ValueError(
+            f"_normalize_axes_shape_for_ometiff: axes '{axes}' (len={len(axes)}) "
+            f"does not fit to shape ndim={len(shape)}"
+        )
+
+    keep_indices = list(range(len(shape)))
+    if "S" in axes:
+        s_idx = axes.index("S")
+        if shape[s_idx] == 1:
+            keep_indices.remove(s_idx)
+            axes = axes.replace("S", "")
+            shape = tuple(shape[i] for i in keep_indices)
+
+    if len(axes) != len(shape):
+        raise ValueError(
+            f"_normalize_axes_shape_for_ometiff: axes '{axes}' (len={len(axes)}) "
+            f"does not fit to normalized shape ndim={len(shape)}"
+        )
+
+    return shape, axes, keep_indices
+
+
+def _iter_ometiff_planes_from_zarr(image, axes_in, desired_axes="TCZYX"):
+    """
+    Yield 2D planes from a Zarr array in the requested OME-TIFF axis order.
+
+    The iterator keeps only a single YX plane in memory at a time while preserving
+    the same logical axis permutation used by the in-memory writer path.
+    """
+    source_shape = tuple(image.shape)
+    norm_shape, norm_axes, keep_indices = _normalize_axes_shape_for_ometiff(
+        source_shape,
+        axes_in)
+
+    missing = [ax for ax in desired_axes if ax not in norm_axes]
+    if missing:
+        raise ValueError(
+            "imwrite: Zarr-backed OME-TIFF writing requires axes "
+            f"{desired_axes!r}; missing {missing!r} in metadata axes {norm_axes!r}."
+        )
+    extra = [ax for ax in norm_axes if ax not in desired_axes]
+    if extra:
+        raise ValueError(
+            "imwrite: Zarr-backed OME-TIFF writing does not support extra non-OME "
+            f"axes {extra!r} in metadata axes {norm_axes!r}."
+        )
+
+    target_shape = tuple(norm_shape[norm_axes.index(ax)] for ax in desired_axes)
+    target_outer_axes = desired_axes[:-2]
+    target_outer_shape = target_shape[:-2]
+
+    norm_to_source = {norm_i: src_i for norm_i, src_i in enumerate(keep_indices)}
+    axis_to_source = {
+        ax: norm_to_source[norm_axes.index(ax)]
+        for ax in norm_axes
+    }
+
+    source_spatial_axes = "".join(
+        ax for ax in axes_in
+        if ax in ("Y", "X") and ax in axis_to_source
+    )
+    if sorted(source_spatial_axes) != ["X", "Y"]:
+        raise ValueError(
+            "imwrite: Zarr-backed OME-TIFF writing requires exactly one Y and one X axis "
+            f"after normalization; got spatial axes {source_spatial_axes!r}."
+        )
+
+    for outer_index in np.ndindex(*target_outer_shape):
+        source_index = [0] * len(source_shape)
+
+        for ax, value in zip(target_outer_axes, outer_index):
+            source_index[axis_to_source[ax]] = value
+
+        source_index[axis_to_source["Y"]] = slice(None)
+        source_index[axis_to_source["X"]] = slice(None)
+
+        plane = np.asarray(image[tuple(source_index)])
+        if source_spatial_axes != "YX":
+            plane = np.moveaxis(
+                plane,
+                [source_spatial_axes.index("Y"), source_spatial_axes.index("X")],
+                [0, 1])
+
+        yield plane
+
+
+def _prepare_zarr_for_ometiff_write(image, axes_in, desired_axes="TCZYX"):
+    """
+    Prepare a Zarr array for plane-wise OME-TIFF writing.
+
+    Returns an iterator, target shape, dtype, and output axes without materializing
+    the full Zarr store.
+    """
+    norm_shape, norm_axes, _ = _normalize_axes_shape_for_ometiff(image.shape, axes_in)
+
+    missing = [ax for ax in desired_axes if ax not in norm_axes]
+    if missing:
+        raise ValueError(
+            "imwrite: Zarr-backed OME-TIFF writing requires axes "
+            f"{desired_axes!r}; missing {missing!r} in metadata axes {norm_axes!r}."
+        )
+    extra = [ax for ax in norm_axes if ax not in desired_axes]
+    if extra:
+        raise ValueError(
+            "imwrite: Zarr-backed OME-TIFF writing does not support extra non-OME "
+            f"axes {extra!r} in metadata axes {norm_axes!r}."
+        )
+
+    target_shape = tuple(norm_shape[norm_axes.index(ax)] for ax in desired_axes)
+    planes = _iter_ometiff_planes_from_zarr(image, axes_in, desired_axes=desired_axes)
+
+    return planes, target_shape, image.dtype, desired_axes
 # function to extract original filename from metadata:
 def _get_original_filename_from_metadata(metadata: dict) -> Union[None, str]:
     """
@@ -4874,6 +4998,10 @@ def imwrite(fname: str,
     normalizes axes for OME-TIFF writing, decides whether BigTIFF is required, and
     writes a compressed OME-TIFF using zlib.
 
+    Zarr-backed inputs are written plane-wise to avoid materializing the full store
+    in RAM. OMIO still writes the same OME-TIFF layout as the in-memory path, but
+    only the currently written YX plane is converted to NumPy at a time.
+
     Output naming follows a provenance-first policy:
 
     * If the metadata contain an original filename inside ``Annotations``, that
@@ -4898,7 +5026,9 @@ def imwrite(fname: str,
     images : np.ndarray or zarr.core.array.Array or list of such arrays
         Image data to write. A single image is accepted and treated as a one-element
         list. Arrays are expected to represent OME-like dimensions; the function
-        normalizes axes and permutes to the writer's target order internally.
+        normalizes axes and permutes to the writer's target order internally. Zarr
+        arrays are streamed plane-wise so large disk-backed arrays do not need to be
+        loaded fully into RAM before OME-TIFF export.
     metadatas : dict or list of dict
         Metadata dictionary or list of dictionaries aligned with `images`. Each
         metadata dictionary should include at least ``axes`` and physical pixel sizes
@@ -4938,9 +5068,12 @@ def imwrite(fname: str,
     -----
     * BigTIFF selection is determined by `_check_bigtiff`, using the uncompressed
       array size and, if needed, an estimated compressed size.
-    * Axes are normalized by `_normalize_axes_for_ometiff` (currently removing a
-      singleton ``"S"`` axis) and then permuted into the writer's target axis order
-      before writing.
+    * NumPy-backed inputs are normalized by `_normalize_axes_for_ometiff` (currently
+      removing a singleton ``"S"`` axis) and then permuted into the writer's target
+      axis order before writing.
+    * Zarr-backed inputs use an equivalent shape/index based normalization and are
+      passed to `tifffile.imwrite` as a plane iterator together with explicit
+      ``shape`` and ``dtype``.
     * Physical pixel sizes are written both as OME physical size fields and as TIFF
       resolution tags using ``resolution=(1/PhysicalSizeY, 1/PhysicalSizeX)``.
     * Map annotations are written from ``metadata["Annotations"]``. If annotations
@@ -5027,17 +5160,26 @@ def imwrite(fname: str,
         if verbose:
             print(f"Writing OME-TIFF to: {fname_out_stack} (bigtiff={use_bigtiff})")
 
-        # reorder axes to OME standard TZCYX:
+        # reorder axes to the OME-TIFF writer target order without forcing Zarr
+        # inputs into memory.
         axes_in = metadata.get("axes", "TZCYX")
-        image_ome, axes_in = _normalize_axes_for_ometiff(image, axes_in)
         desired_axes = "TCZYX"
-        if axes_in != desired_axes:
-            idx = {ax: i for i, ax in enumerate(axes_in)}
-            perm = [idx[ax] for ax in desired_axes]
-            image_ome = np.moveaxis(image_ome, perm, range(len(perm)))
-            axes_out = desired_axes
+        if isinstance(image, zarr.core.array.Array):
+            image_ome, image_ome_shape, image_ome_dtype, axes_out = _prepare_zarr_for_ometiff_write(
+                image,
+                axes_in,
+                desired_axes=desired_axes)
         else:
-            axes_out = axes_in
+            image_ome, axes_in = _normalize_axes_for_ometiff(image, axes_in)
+            if axes_in != desired_axes:
+                idx = {ax: i for i, ax in enumerate(axes_in)}
+                perm = [idx[ax] for ax in desired_axes]
+                image_ome = np.moveaxis(image_ome, perm, range(len(perm)))
+                axes_out = desired_axes
+            else:
+                axes_out = axes_in
+            image_ome_shape = None
+            image_ome_dtype = None
         len_unit = metadata.get("unit", "µm")
         if len_unit in ("micron", "micrometer", "um"):
             len_unit = "µm"
@@ -5090,17 +5232,28 @@ def imwrite(fname: str,
                 ma_list.append(ma)
             if ma_list:
                 ome_meta["MapAnnotation"] = ma_list
-        tifffile.imwrite(
-            fname_out_stack,
-            image_ome,
-            ome=True,
-            compression="zlib",
-            compressionargs={"level": compression_level},
-            resolution=(1/metadata["PhysicalSizeY"], 1/metadata["PhysicalSizeX"]),
-            metadata=ome_meta,
-            photometric="minisblack",
-            imagej=False,
-            bigtiff=use_bigtiff)
+        imwrite_kwargs = {
+            "ome": True,
+            "compression": "zlib",
+            "compressionargs": {"level": compression_level},
+            "resolution": (1/metadata["PhysicalSizeY"], 1/metadata["PhysicalSizeX"]),
+            "metadata": ome_meta,
+            "photometric": "minisblack",
+            "imagej": False,
+            "bigtiff": use_bigtiff,
+        }
+        if isinstance(image, zarr.core.array.Array):
+            tifffile.imwrite(
+                fname_out_stack,
+                data=image_ome,
+                shape=image_ome_shape,
+                dtype=image_ome_dtype,
+                **imwrite_kwargs)
+        else:
+            tifffile.imwrite(
+                fname_out_stack,
+                image_ome,
+                **imwrite_kwargs)
         fnames_written.append(fname_out_stack)
     if return_fnames:
         return fnames_written

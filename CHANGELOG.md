@@ -10,6 +10,26 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
+## 🚀 OMIO v0.2.6
+
+July 29, 2026
+
+This small maintenance release improves memory efficiency when exporting large Zarr-backed OMIO arrays to OME-TIFF.
+
+### 📃 Changes
+#### 🧩 Changed
+* `imwrite` now writes Zarr-backed inputs plane-wise instead of materializing the full Zarr store with `np.asarray`.
+* Zarr-backed `imwrite` exports still use the same OME-TIFF writer axis layout as before and remain compatible with OMIO readback to canonical `TZCYX`.
+
+#### 📚 Documentation
+* Added Large File Handling documentation for memory-aware OME-TIFF export from Zarr-backed OMIO arrays.
+* Extended the interactive usage example with a disk-backed Zarr-to-OME-TIFF `imwrite` workflow and roundtrip check.
+
+#### 🧪 Testing and robustness
+* Added regression coverage to ensure Zarr-backed `imwrite` does not perform full-array materialization while preserving OME-TIFF axis semantics and OMIO roundtrip behavior.
+
+---
+
 ## 🚀 OMIO v0.2.5
 
 July 28, 2026

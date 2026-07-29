@@ -89,6 +89,7 @@ creates ``.omio_cache``:
    print(metadata_local_cache["omio_cache_folder"])
    print(metadata_local_cache["omio_zarr_store_path"])
 
+
 You can open any of the above lazy-loaded images in napari as you would
 do with any other OMIO read image:
 
@@ -113,7 +114,8 @@ Reuse an existing on-disk OMIO cache
 
 If you repeatedly open the same large file with ``zarr_store="disk"``, OMIO can reuse
 an already existing, validated cache store instead of rebuilding it from the original
-image each time. This is useful for iterative interactive work on large files. When OMIO creates a disk-backed cache, it also stores the OMIO metadata and a cache
+image each time. This is useful for iterative interactive work on large files. When 
+OMIO creates a disk-backed cache, it also stores the OMIO metadata and a cache
 manifest directly in the Zarr attributes. On later reads, ``reuse_disk_cache=True``
 instructs OMIO to validate that manifest against the current source file and read
 settings before reusing the cache.
@@ -166,19 +168,9 @@ arrays with ``create_empty_image(..., zarr_store="disk")``. In that case, OMIO r
 ``omio_cache_folder`` and ``omio_zarr_store_path`` in the returned metadata so the
 generated store can be inspected or cleaned up later.
 
-For caches created in a custom location, you can remove the complete cache folder using
-the path recorded in the returned metadata:
 
-.. code-block:: python
-
-   om.cleanup_omio_cache(metadata_cache_1["omio_cache_folder"], full_cleanup=True)
-
-or provide the cache folder path directly:
-
-.. code-block:: python
-
-   om.cleanup_omio_cache(local_cache_root, full_cleanup=True)
-
+Cleanup of temporary Zarr stores
+----------------------------------
 
 There is intentionally no automatic cleanup of the temporary Zarr stores, as users may
 want to reuse them for downstream processing. To manually clean up the temporary Zarr 
@@ -194,6 +186,54 @@ This command cleans up only the temporary Zarr store associated with the given
 .. code-block:: python
 
    om.cleanup_omio_cache(fname, full_cleanup=True)
+
+
+For caches created in a custom location, you can remove the complete cache folder
+using the set local cache root path, 
+
+.. code-block:: python
+
+   om.cleanup_omio_cache(local_cache_root, full_cleanup=True)
+
+
+or use the path recorded in the returned metadata:
+
+.. code-block:: python
+
+   om.cleanup_omio_cache(metadata_cache_1["omio_cache_folder"], full_cleanup=True)
+
+
+
+Write Zarr-backed arrays as OME-TIFF without loading the full store
+-------------------------------------------------------------------
+
+Disk-backed Zarr arrays returned by ``imread(..., zarr_store="disk")`` can be written
+back to OME-TIFF with ``imwrite``. For Zarr inputs, OMIO writes the output plane by
+plane instead of converting the entire Zarr store to a NumPy array first. This keeps
+the final OME-TIFF export memory-aware while preserving OMIO's usual OME axis
+semantics: The written OME-TIFF uses OMIO's established writer layout internally and
+reading it again with ``om.imread`` returns canonical ``TZCYX`` data.
+
+This behavior applies equally to default disk caches next to the source file and to
+custom local cache locations created with ``zarr_store_path``. The output is still a
+regular OME-TIFF file; only the export path avoids full Zarr materialization.
+
+.. code-block:: python
+
+   image_large, metadata_large = om.imread(
+       fname,
+       zarr_store="disk",
+       reuse_disk_cache=True)
+
+   output_files = om.imwrite(
+       fname,
+       image_large,
+       metadata_large,
+       overwrite=True,
+       return_fnames=True)
+
+   image_roundtrip, metadata_roundtrip = om.imread(output_files[0])
+   print(metadata_roundtrip["axes"])  # "TZCYX"
 
 
 Efficiently view large images in Napari with OMIO’s DASK support

@@ -3952,6 +3952,51 @@ def test_write_ometiff_images_metadatas_length_mismatch_raises(tmp_path):
             verbose=False,
         )
 
+def test_write_ometiff_zarr_streams_without_full_materialization(tmp_path, monkeypatch):
+    data = np.arange(2 * 3 * 2 * 5 * 6, dtype=np.uint16).reshape((2, 3, 2, 5, 6))
+    zarr_path = tmp_path / "source.zarr"
+    z = zarr.open(
+        str(zarr_path),
+        mode="w",
+        shape=data.shape,
+        dtype=data.dtype,
+        chunks=(1, 1, 1, 5, 6))
+    z[:] = data
+
+    _, md = _make_image_and_metadata(shape=data.shape)
+
+    import omio.omio as omio_module
+
+    real_asarray = omio_module.np.asarray
+
+    def guarded_asarray(obj, *args, **kwargs):
+        if obj is z:
+            raise AssertionError("imwrite materialized the full Zarr array")
+        return real_asarray(obj, *args, **kwargs)
+
+    monkeypatch.setattr(omio_module.np, "asarray", guarded_asarray)
+
+    out_anchor = tmp_path / "zarr_streamed.ome.tif"
+    fnames = imwrite(
+        str(out_anchor),
+        z,
+        md,
+        overwrite=True,
+        return_fnames=True,
+        verbose=False)
+
+    assert fnames == [str(out_anchor)]
+    with tifffile.TiffFile(str(out_anchor)) as tif:
+        assert tif.series[0].axes == "TCZYX"
+        np.testing.assert_array_equal(
+            tif.series[0].asarray(),
+            np.transpose(data, (0, 2, 1, 3, 4)))
+
+    roundtrip, roundtrip_md = imread(str(out_anchor), verbose=False)
+
+    assert roundtrip_md["axes"] == "TZCYX"
+    np.testing.assert_array_equal(roundtrip, data)
+
 # %% IMREAD
 
 def test_imread_single_tif_dispatches_to_tif_reader(tmp_path):
