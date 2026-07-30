@@ -1,4 +1,4 @@
-API Reference
+API reference
 =============
 
 OMIO's public API functions
