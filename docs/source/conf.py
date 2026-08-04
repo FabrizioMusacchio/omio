@@ -79,3 +79,4 @@ copybutton_selector = "div.highlight-python pre"
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_static_path = ['_static']
+html_logo = "_static/figures/OMIO_logo_wide_transparent_descr.png"
