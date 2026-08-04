@@ -67,6 +67,10 @@ OMIO: A policy-driven Python library for reproducible microscopy image I/O
    :target: https://doi.org/10.5281/zenodo.18030883
    :alt: Zenodo Archive
 
+.. image:: https://img.shields.io/badge/bioRxiv-10.64898%2F2026.06.09.731118-red
+   :target: https://doi.org/10.64898/2026.06.09.731118
+   :alt: bioRxiv preprint
+
 
 `OMIO (Open Microscopy Image I/O) <https://github.com/FabrizioMusacchio/omio>`_ is a policy-driven Python library 
 for reading, organizing, merging, visualizing, and exporting multidimensional 
