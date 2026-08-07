@@ -3034,6 +3034,48 @@ def test_read_thorlabs_raw_uses_yaml_when_no_xml_present(tmp_path):
     assert md["TimeIncrement"] == pytest.approx(2.0)
     assert md["TimeIncrementUnit"] == "seconds"
 
+def test_read_thorlabs_raw_uses_yaml_when_xml_is_incomplete(tmp_path):
+    T, Z, C, Y, X = 2, 3, 2, 5, 7
+    raw_path = tmp_path / "example.raw"
+    xml_path = tmp_path / "Experiment.xml"
+    yaml_path = tmp_path / "meta.yaml"
+
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+    xml_path.write_text("<ThorImage><NotLSM /></ThorImage>", encoding="utf-8")
+    _write_yaml(
+        yaml_path,
+        {
+            "T": T,
+            "Z": Z,
+            "C": C,
+            "Y": Y,
+            "X": X,
+            "bits": 16,
+            "pixelunit": "micron",
+            "PhysicalSizeX": 0.51,
+            "PhysicalSizeY": 0.52,
+            "PhysicalSizeZ": 1.3,
+            "TimeIncrement": 2.5,
+            "TimeIncrementUnit": "seconds",
+        },
+    )
+
+    with pytest.warns(UserWarning, match="Falling back to YAML"):
+        image, md = read_thorlabs_raw(str(raw_path), zarr_store=None, verbose=False)
+
+    assert isinstance(image, np.ndarray)
+    assert image.shape == (T, Z, C, Y, X)
+    assert md["axes"] == "TZCYX"
+    assert md["SizeT"] == T
+    assert md["SizeZ"] == Z
+    assert md["SizeC"] == C
+    assert md["SizeY"] == Y
+    assert md["SizeX"] == X
+    assert md["PhysicalSizeX"] == pytest.approx(0.51)
+    assert md["PhysicalSizeY"] == pytest.approx(0.52)
+    assert md["PhysicalSizeZ"] == pytest.approx(1.3)
+    assert md["TimeIncrement"] == pytest.approx(2.5)
+
 def test_read_thorlabs_raw_yaml_missing_required_key_warns_and_returns_none(tmp_path):
     # YAML exists but is missing required key 'bits' (or any of T,Z,C,Y,X,bits)
     raw_path = tmp_path / "example.raw"
@@ -3125,6 +3167,62 @@ def test_read_thorlabs_raw_xml_missing_lsm_raises(tmp_path):
 
     with pytest.raises(ValueError, match="missing the LSM node"):
         read_thorlabs_raw(str(raw_path), verbose=False)
+
+def test_read_thorlabs_raw_xml_missing_lsm_return_none_policy(tmp_path):
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+    _write_dummy_raw(raw_path, T=1, Z=1, C=1, Y=4, X=4, dtype=np.uint16)
+
+    _write_thorlabs_xml_variant(xml_path, lsm=False)
+
+    with pytest.warns(UserWarning, match="on_error='return_none'"):
+        image, md = read_thorlabs_raw(
+            str(raw_path),
+            on_error="return_none",
+            verbose=False)
+
+    assert image is None
+    assert md is None
+
+def test_read_thorlabs_raw_xml_missing_lsm_return_none_policy_return_list(tmp_path):
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+    _write_dummy_raw(raw_path, T=1, Z=1, C=1, Y=4, X=4, dtype=np.uint16)
+
+    _write_thorlabs_xml_variant(xml_path, lsm=False)
+
+    with pytest.warns(UserWarning, match="on_error='return_none'"):
+        images, mds = read_thorlabs_raw(
+            str(raw_path),
+            on_error="return_none",
+            return_list=True,
+            verbose=False)
+
+    assert images == [None]
+    assert mds == [None]
+
+def test_read_thorlabs_raw_invalid_on_error_raises(tmp_path):
+    raw_path = tmp_path / "x.raw"
+    raw_path.write_bytes(b"")
+
+    with pytest.raises(ValueError, match="on_error"):
+        read_thorlabs_raw(str(raw_path), on_error="skip", verbose=False)
+
+def test_imread_raw_return_none_policy_for_unusable_xml(tmp_path):
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+    _write_dummy_raw(raw_path, T=1, Z=1, C=1, Y=4, X=4, dtype=np.uint16)
+
+    _write_thorlabs_xml_variant(xml_path, lsm=False)
+
+    with pytest.warns(UserWarning, match="on_error='return_none'"):
+        image, md = imread(
+            str(raw_path),
+            on_error="return_none",
+            verbose=False)
+
+    assert image is None
+    assert md is None
 
 def test_read_thorlabs_raw_xml_no_wavelengths_uses_lsm_channel(tmp_path):
     T, Z, C, Y, X = 1, 2, 3, 4, 5

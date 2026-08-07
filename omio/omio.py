@@ -3506,15 +3506,16 @@ def read_czi(fname, physicalsize_xyz=None, pixelunit="micron", zarr_store=None,
 # Thorlabs RAW file reader:
 def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
                       zarr_store=None, zarr_store_path=None, return_list=False,
-                      reuse_disk_cache=False, verbose=True):
+                      reuse_disk_cache=False, on_error="raise", verbose=True):
     """
     Read Thorlabs RAW files into OMIO's canonical representation.
 
     This function reads a Thorlabs RAW file and constructs an image array together
     with an OMIO metadata dictionary that follows the canonical OME axis convention
     TZCYX. Dimensions and acquisition metadata are obtained from an accompanying XML
-    file in the same folder. If no XML is present, the function falls back to a
-    single YAML metadata file located in the same folder.
+    file in the same folder. If no XML is present, or if the XML is present but
+    incomplete or inconsistent, the function falls back to a single YAML metadata
+    file located in the same folder.
 
     The RAW payload is interpreted as a contiguous raster of pixel values that must
     be reshaped into a 5D stack ``(T, Z, C, Y, X)``. If requested, the data are
@@ -3522,14 +3523,15 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
     copying is performed slice-wise over the last two spatial dimensions to limit
     peak RAM usage.
     
-    **YAML fallback in case of missing XML:**
-    In case no XML metadata file is found, the function looks for a YAML file
-    in the same folder. If found, it extracts the necessary dimensions and pixel
-    size information from the YAML keys ``T``, ``Z``, ``C``, ``Y``, ``X``, ``bits``,
-    ``PhysicalSizeX``, ``PhysicalSizeY``, ``PhysicalSizeZ``, and ``pixelunit``.
+    **YAML fallback in case of missing or unusable XML:**
+    In case no XML metadata file is found, or if the XML metadata file is incomplete
+    or inconsistent, the function looks for a YAML file in the same folder. If found,
+    it extracts the necessary dimensions and pixel size information from the YAML
+    keys ``T``, ``Z``, ``C``, ``Y``, ``X``, ``bits``, ``PhysicalSizeX``,
+    ``PhysicalSizeY``, ``PhysicalSizeZ``, and ``pixelunit``.
     
     The YAML file is not generated automatically by OMIO; it must be created
-    manually if no XML is available.
+    manually if no usable XML metadata are available.
     
     An example YAML file might look like this:
     .. code-block:: yaml
@@ -3595,6 +3597,12 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
         If True and ``zarr_store="disk"``, OMIO first checks for a compatible
         existing on-disk cache and reuses it instead of rebuilding the Zarr store.
         Default is False.
+    on_error : {"raise", "return_none"}, optional
+        Error policy for unrecoverable Thorlabs metadata problems. ``"raise"``
+        preserves the default behavior and raises a ValueError. ``"return_none"``
+        emits a warning and returns ``(None, None)`` or ``([None], [None])``
+        instead, which is useful for batch pipelines that want to skip unreadable
+        RAW files explicitly. Default is ``"raise"``.
     verbose : bool, optional
         If True, print diagnostic progress messages. Default is True.
 
@@ -3609,8 +3617,9 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
     Raises
     ------
     ValueError
-        If `zarr_store` is not one of {None, "memory", "disk"}, or if an XML file is
-        present but incomplete or inconsistent.
+        If `zarr_store` is not one of {None, "memory", "disk"}, if `on_error` is not
+        one of {"raise", "return_none"}, or if an XML file is present but incomplete
+        or inconsistent, no YAML fallback is available, and `on_error="raise"`.
     FileNotFoundError
         If `fname` does not exist.
     ImportError
@@ -3620,7 +3629,7 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
     -----
     * RAW reading requires the dimensions T, Z, C, Y, X and a bit depth to infer the
       dtype and reshape the pixel stream. XML metadata is preferred. YAML is used
-      only if XML is absent.
+      if XML is absent or if XML parsing/validation fails.
     * YAML fallback expects at minimum the keys ``T``, ``Z``, ``C``, ``Y``, ``X``,
       and ``bits``. Additional keys such as ``pixelunit``, ``PhysicalSizeX/Y/Z``,
       and ``TimeIncrement`` are optional.
@@ -3638,6 +3647,9 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
     if zarr_store not in (None, "memory", "disk"):
         raise ValueError("read_thorlabs_raw: zarr_store must be one of None, 'memory', or 'disk'. "
                          f"Got: {zarr_store!r}")
+    if on_error not in ("raise", "return_none"):
+        raise ValueError("read_thorlabs_raw: on_error must be one of 'raise' or 'return_none'. "
+                         f"Got: {on_error!r}")
 
     if verbose:
         print(f"Reading Thorlabs RAW file: {fname}")
@@ -3702,15 +3714,23 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
         if f.lower().endswith(".xml") and not os.path.basename(f).startswith(".")
     )
     xml_path = None
+    xml_error = None
     if xml_files:
         xml_path = os.path.join(folder, xml_files[0])
         if verbose:
             print(f"  Found XML file: {xml_files[0]}. Will use it for metadata extraction...")
 
-        tree = ET.parse(xml_path)
-        root = tree.getroot()
+        try:
+            tree = ET.parse(xml_path)
+            root = tree.getroot()
+        except Exception as e:
+            xml_error = e
+            root = None
 
         try:
+            if root is None:
+                raise xml_error
+
             lsm_node = root.find(".//LSM")
             if lsm_node is None:
                 raise ValueError(f"The XML file {xml_path} is missing the LSM node.")
@@ -3826,14 +3846,22 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
                     metadata["original_creation_or_change_date"] = creation_date_utc.strftime("%Y-%m-%dT%H:%M:%S")
 
         except Exception as e:
-            raise ValueError(f"The XML file {xml_path} is incomplete or inconsistent: {e}")
+            xml_error = e
+            if verbose:
+                print(f"  WARNING: XML file {xml_path} is incomplete or inconsistent: {e}")
+                print("           Will try YAML fallback if available.")
 
     
-    # fallback: YAML metadata in same folder if XML missing:
+    # fallback: YAML metadata in same folder if XML is missing or unusable:
+    yaml_path = None
     if dims is None:
         yaml_path = _find_single_yaml(folder)
         if yaml_path is not None:
-            if verbose:
+            if xml_error is not None:
+                warnings.warn(
+                    f"XML metadata file {xml_path} is incomplete or inconsistent: {xml_error}. "
+                    f"Falling back to YAML metadata file {yaml_path}.")
+            elif verbose:
                 print(f"  No XML file found. Found YAML metadata file: {os.path.basename(yaml_path)}.")
             ymd = _load_yaml_metadata(yaml_path)
 
@@ -3888,6 +3916,15 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
                 return [None], [None]
             return None, None """
     
+    if dims is None and xml_error is not None and yaml_path is None:
+        msg = f"The XML file {xml_path} is incomplete or inconsistent: {xml_error}"
+        if on_error == "return_none":
+            warnings.warn(msg + " Returning (None, None) because on_error='return_none'.")
+            if return_list:
+                return [None], [None]
+            return None, None
+        raise ValueError(msg)
+
     # if neither XML nor YAML provided dimensions, do not abort. Warn and return None:
     if dims is None:
         print("WARNING: No Thorlabs XML metadata and no YAML fallback found.\n"
@@ -7229,6 +7266,7 @@ def _dispatch_read_file(path: str,
                         physicalsize_xyz: Union[None, Any] = None,
                         pixelunit: str = "micron",
                         reuse_disk_cache: bool = False,
+                        on_error: str = "raise",
                         verbose: bool = True,
                         ) -> Tuple[Any, Dict[str, Any]]:
     """
@@ -7268,6 +7306,10 @@ def _dispatch_read_file(path: str,
         according to its own precedence policy.
     pixelunit : str
         Unit string forwarded to the reader for unit normalization and defaults.
+    on_error : {"raise", "return_none"}, optional
+        Error policy forwarded to readers that support recoverable batch-friendly
+        failures. Currently used by the Thorlabs RAW reader for unrecoverable
+        metadata problems.
     verbose : bool, optional
         If True, forward diagnostic progress output from the reader.
 
@@ -7319,6 +7361,7 @@ def _dispatch_read_file(path: str,
             physicalsize_xyz=physicalsize_xyz,
             pixelunit=pixelunit,
             reuse_disk_cache=reuse_disk_cache,
+            on_error=on_error,
             verbose=verbose)
 
     raise ValueError(f"Unsupported file extension '{_lower_ext(lp)}' for path: {path}")
@@ -7426,6 +7469,7 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
          zarr_store: Union[None, str] = None,
          zarr_store_path: Union[None, str, os.PathLike] = None,
          reuse_disk_cache: bool = False,
+         on_error: str = "raise",
          return_list: bool = False,
          recursive: bool = False,
          folder_stacks: bool = False,
@@ -7510,6 +7554,12 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
         file. Validation compares source path, file size, modification time,
         OMIO version, relevant backend versions, and applicable read overrides.
         Default is False.
+    on_error : {"raise", "return_none"}, optional
+        Error policy for format-specific reader failures that support explicit
+        batch-friendly skipping. Currently this affects Thorlabs RAW files with
+        unrecoverable XML/YAML metadata problems. ``"raise"`` preserves the
+        default behavior. ``"return_none"`` returns ``None`` image/metadata pairs
+        for those files so callers can skip them explicitly. Default is ``"raise"``.
     return_list : bool, optional
         If True, always return lists of images and metadata. If False, return a single image
         and metadata for single input cases, otherwise lists. Default is False.
@@ -7561,6 +7611,9 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
     if merge_along_axis not in _ALLOWED_MERGE_AXES:
         raise ValueError(f"read: merge_along_axis must be one of {sorted(_ALLOWED_MERGE_AXES)}. "
                          f"Got: {merge_along_axis!r}")
+    if on_error not in ("raise", "return_none"):
+        raise ValueError("read: on_error must be one of 'raise' or 'return_none'. "
+                         f"Got: {on_error!r}")
 
     allowed_ext = {".tif", ".tiff", ".lsm", ".czi", ".raw", ".ome.tif", ".ome.tiff"}
     # TODO: maybe we shift this variable to a module-level global later
@@ -7634,7 +7687,13 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
                     physicalsize_xyz=physicalsize_xyz,
                     pixelunit=pixelunit,
                     reuse_disk_cache=reuse_disk_cache,
+                    on_error=on_error,
                     verbose=verbose)
+
+                if img is None or md is None:
+                    if verbose:
+                        print(f"    Reader returned None for folder stack file: {f0!r}. Skipping.")
+                    continue
                 
                 # post-hoc OME metadata checkup and correction:
                 md = OME_metadata_checkup(md, verbose=verbose)
@@ -7688,11 +7747,23 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
                 pixelunit=pixelunit,
                 reuse_disk_cache=reuse_disk_cache,
                 return_list=False,
+                on_error=on_error,
                 verbose=verbose)
+            if img is None or md is None:
+                if verbose:
+                    print(f"    Reader returned None for file: {f!r}. Skipping.")
+                continue
             images.append(img)
             metadatas.append(md)
 
         if merge_multiple_files_in_folder:
+            if not images:
+                if verbose:
+                    print("    No readable images found in folder. Abort merging.")
+                if return_list:
+                    return [None], [None]
+                return None, None
+
             merged_img, merged_md = _merge_concat_along_axis(
                 images, metadatas,
                 merge_along_axis=merge_along_axis,
@@ -7729,6 +7800,7 @@ def imread(fname: Union[str, os.PathLike, List[Union[str, os.PathLike]]],
             physicalsize_xyz=physicalsize_xyz,
             pixelunit=pixelunit,
             reuse_disk_cache=reuse_disk_cache,
+            on_error=on_error,
             verbose=verbose)
         images.append(img)
         metadatas.append(md)

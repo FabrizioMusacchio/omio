@@ -17,9 +17,13 @@ This upcoming maintenance release improves robustness of Thorlabs RAW metadata d
 ### 📃 Changes
 #### 🧩 Changed
 * The Thorlabs RAW reader now ignores hidden dot XML files such as `._Experiment.xml` and `.Experiment.xml` when looking for XML metadata.
+* If a Thorlabs XML metadata file is present but incomplete or inconsistent, `read_thorlabs_raw` now falls back to a valid YAML metadata file in the same folder instead of aborting immediately.
+* Added `on_error="raise"|"return_none"` to `imread` and `read_thorlabs_raw` so batch workflows can opt into `(None, None)` returns for unrecoverable Thorlabs RAW metadata problems.
 
 #### 🧪 Testing and robustness
 * Added regression coverage for Thorlabs RAW folders that contain hidden dot XML sidecar files next to the real metadata XML.
+* Added regression coverage for user-repaired Thorlabs RAW folders where a broken XML file remains next to a valid YAML metadata fallback.
+* Added regression coverage for strict and batch-friendly Thorlabs RAW error policies.
 
 ---
 

@@ -132,8 +132,11 @@ Terminal output during reading:
 
             You may also use omio.create_thorlabs_raw_yaml(fname) to generate such a file interactively.
 
-In such cases, you can provide a YAML file with the required metadata as a fallback. The YAML
-file must be located in the same folder as the RAW file and has the following structure:
+In such cases, you can provide a YAML file with the required metadata as a fallback. The
+same fallback is used when a Thorlabs XML file is present but incomplete or inconsistent,
+for example when the original XML file is corrupt but should remain in the acquisition
+folder for provenance. The YAML file must be located in the same folder as the RAW file
+and has the following structure:
 
 .. code-block:: yaml
 
@@ -151,6 +154,21 @@ file must be located in the same folder as the RAW file and has the following st
    TimeIncrementUnit: seconds
 
 Avoid placing more than one YAML file in the same folder as the RAW file to prevent ambiguity.
+
+By default, unresolved XML/YAML metadata problems raise a ``ValueError`` so that
+interactive workflows fail loudly. For batch pipelines, you can request an explicit
+``None`` result instead:
+
+.. code-block:: python
+
+   image_raw, metadata_raw = om.imread(fname_raw, on_error="return_none")
+
+   if image_raw is None or metadata_raw is None:
+       # skip this file and continue with the next batch item
+       pass
+
+This does not create an empty placeholder image; unreadable RAW files are represented
+as ``(None, None)`` so downstream code can skip them deliberately.
 
 You can also use OMIO’s utility function ``create_thorlabs_raw_yaml(fname)`` to create an
 empty YAML template that you can fill in manually. The template is created in the same
