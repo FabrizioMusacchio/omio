@@ -56,12 +56,15 @@ Reading Thorlabs RAW files
 ----------------------------
 
 OMIO supports reading of Thorlabs RAW files via the ``imread`` function, which internally
-calls the ``read_thorlabs_raw`` function. ``read_thorlabs_raw`` is a custom OMIO function.
+calls the ``read_thorlabs_raw`` function:
 
-For older Python versions (<= 3.9), the PyPI package ``utils2p`` was a common solution to
+``read_thorlabs_raw`` is a custom OMIO function. For older Python versions (<= 3.9), the 
+PyPI package ``utils2p`` was a common solution to
 read Thorlabs RAW files, but this package is no longer maintained and does not support
 Python 3.10 and above. Thus, OMIO provides its own implementation to read Thorlabs RAW files.
-Note, however, that OMIO itself requires Python 3.12 or newer.
+
+Let's read a Thorlabs RAW file with the associated XML metadata file. We first
+define the path to the RAW file:
 
 .. code-block:: python
 
@@ -81,7 +84,7 @@ XML file to be present.
    pprint.pprint(metadata_raw)
    om.open_in_napari(image_raw, metadata_raw)
 
-Output (only the print command):
+Output:
 
 .. code-block:: text
 
