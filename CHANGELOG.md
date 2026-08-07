@@ -10,9 +10,11 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
-## 🔜 OMIO v0.2.7 unreleased
+## 🚀 OMIO v0.2.7
 
-This upcoming maintenance release improves robustness of Thorlabs RAW metadata discovery.
+August 07, 2026
+
+This maintenance release improves robustness of Thorlabs RAW metadata discovery.
 
 ### 📃 Changes
 #### 🧩 Changed
