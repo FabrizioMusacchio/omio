@@ -2865,6 +2865,34 @@ def test_read_thorlabs_raw_reads_xml_and_returns_numpy(tmp_path):
     assert md["PhysicalSizeZ"] > 0
     assert md["Annotations"]["unit"] is not None
 
+def test_read_thorlabs_raw_ignores_hidden_dot_xml_files(tmp_path, monkeypatch):
+    T, Z, C, Y, X = 1, 2, 1, 5, 7
+    raw_path = tmp_path / "example.raw"
+    valid_xml = tmp_path / "Experiment.xml"
+    hidden_resource_xml = tmp_path / "._Experiment.xml"
+    hidden_dot_xml = tmp_path / ".Experiment.xml"
+
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+    hidden_resource_xml.write_text("<not-thorlabs />", encoding="utf-8")
+    hidden_dot_xml.write_text("<not-thorlabs />", encoding="utf-8")
+    _write_example_thorlabs_xml(valid_xml, X=X, Y=Y, C=C, T=T, Z=Z, bits=16)
+
+    real_listdir = os.listdir
+
+    def fake_listdir(path):
+        if Path(path) == tmp_path:
+            return [hidden_resource_xml.name, hidden_dot_xml.name, valid_xml.name]
+        return real_listdir(path)
+
+    monkeypatch.setattr("omio.omio.os.listdir", fake_listdir)
+
+    image, md = read_thorlabs_raw(str(raw_path), zarr_store=None, verbose=False)
+
+    assert image.shape == (T, Z, C, Y, X)
+    assert md["SizeZ"] == Z
+    assert md["PhysicalSizeX"] > 0
+    assert md["axes"] == "TZCYX"
+
 # tests:
 
 def test_read_thorlabs_raw_corrects_Z_from_file_size_when_xml_mismatches(tmp_path):

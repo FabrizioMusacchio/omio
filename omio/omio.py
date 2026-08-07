@@ -3694,8 +3694,13 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
     unit_from_meta = None
 
     
-    # preferred: XML metadata in same folder
-    xml_files = [f for f in os.listdir(folder) if f.lower().endswith(".xml")]
+    # preferred: XML metadata in same folder. Hidden dot files such as
+    # ._Experiment.xml or .Experiment.xml are ignored because they may be macOS
+    # sidecar/resource-fork files or accidental editor artifacts.
+    xml_files = sorted(
+        f for f in os.listdir(folder)
+        if f.lower().endswith(".xml") and not os.path.basename(f).startswith(".")
+    )
     xml_path = None
     if xml_files:
         xml_path = os.path.join(folder, xml_files[0])

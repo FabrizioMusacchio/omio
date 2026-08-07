@@ -10,6 +10,19 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
+## 🔜 OMIO v0.2.7 unreleased
+
+This upcoming maintenance release improves robustness of Thorlabs RAW metadata discovery.
+
+### 📃 Changes
+#### 🧩 Changed
+* The Thorlabs RAW reader now ignores hidden dot XML files such as `._Experiment.xml` and `.Experiment.xml` when looking for XML metadata.
+
+#### 🧪 Testing and robustness
+* Added regression coverage for Thorlabs RAW folders that contain hidden dot XML sidecar files next to the real metadata XML.
+
+---
+
 ## 🚀 OMIO v0.2.6
 
 July 29, 2026
