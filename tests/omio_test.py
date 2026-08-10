@@ -3076,6 +3076,56 @@ def test_read_thorlabs_raw_uses_yaml_when_xml_is_incomplete(tmp_path):
     assert md["PhysicalSizeZ"] == pytest.approx(1.3)
     assert md["TimeIncrement"] == pytest.approx(2.5)
 
+def test_read_thorlabs_raw_uses_yaml_when_xml_file_size_is_inconsistent(tmp_path):
+    T, Z, C, Y, X = 2, 3, 2, 5, 7
+    raw_path = tmp_path / "example.raw"
+    xml_path = tmp_path / "Experiment.xml"
+    yaml_path = tmp_path / "Image_001_001_metadata.yaml"
+
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+
+    # This XML is syntactically complete, but its T dimension makes
+    # X*Y*C*T*bytes_per_pixel larger than the RAW file, reproducing the
+    # real-world "Z_from_file_size=0" failure mode.
+    _write_example_thorlabs_xml(
+        xml_path,
+        X=X,
+        Y=Y,
+        C=C,
+        T=999,
+        Z=1,
+        bits=16)
+
+    _write_yaml(
+        yaml_path,
+        {
+            "T": T,
+            "Z": Z,
+            "C": C,
+            "Y": Y,
+            "X": X,
+            "bits": 16,
+            "PixelUnit": "micron",
+            "PhysicalSizeX": 0.21,
+            "PhysicalSizeY": 0.21,
+            "PhysicalSizeZ": 1.0,
+            "TimeIncrement": 1,
+            "TimeIncrementUnit": "seconds",
+        },
+    )
+
+    with pytest.warns(UserWarning, match="Falling back to YAML"):
+        image, md = read_thorlabs_raw(str(raw_path), zarr_store=None, verbose=False)
+
+    assert isinstance(image, np.ndarray)
+    assert image.shape == (T, Z, C, Y, X)
+    assert md["axes"] == "TZCYX"
+    assert md["SizeT"] == T
+    assert md["SizeZ"] == Z
+    assert md["Annotations"]["unit"] == "micron"
+    assert md["PhysicalSizeX"] == pytest.approx(0.21)
+    assert md["PhysicalSizeY"] == pytest.approx(0.21)
+
 def test_read_thorlabs_raw_yaml_missing_required_key_warns_and_returns_none(tmp_path):
     # YAML exists but is missing required key 'bits' (or any of T,Z,C,Y,X,bits)
     raw_path = tmp_path / "example.raw"
@@ -3325,7 +3375,7 @@ def test_read_thorlabs_raw_xml_zfast_disabled_defaults_Z_to_1(tmp_path):
     assert img.shape[1] == 1
     assert md["SizeZ"] == 1
 
-def test_read_thorlabs_raw_xml_filesize_not_multiple_warns_and_returns_none(tmp_path):
+def test_read_thorlabs_raw_xml_filesize_not_multiple_raises(tmp_path):
     T, Z, C, Y, X = 1, 2, 1, 4, 4
     raw_path = tmp_path / "x.raw"
     xml_path = tmp_path / "x.xml"
@@ -3336,8 +3386,25 @@ def test_read_thorlabs_raw_xml_filesize_not_multiple_warns_and_returns_none(tmp_
 
     _write_thorlabs_xml_variant(xml_path, X=X, Y=Y, C_attr=C, T=T, Z=Z, bits=16)
 
-    with pytest.warns(UserWarning, match="RAW data size mismatch"):
-        img, md = read_thorlabs_raw(str(raw_path), verbose=False)
+    with pytest.raises(ValueError, match="not an integer multiple"):
+        read_thorlabs_raw(str(raw_path), verbose=False)
+
+def test_read_thorlabs_raw_xml_filesize_not_multiple_return_none_policy(tmp_path):
+    T, Z, C, Y, X = 1, 2, 1, 4, 4
+    raw_path = tmp_path / "x.raw"
+    xml_path = tmp_path / "x.xml"
+
+    _write_dummy_raw(raw_path, T=T, Z=Z, C=C, Y=Y, X=X, dtype=np.uint16)
+    with open(raw_path, "ab") as f:
+        np.array([123], dtype=np.uint16).tofile(f)
+
+    _write_thorlabs_xml_variant(xml_path, X=X, Y=Y, C_attr=C, T=T, Z=Z, bits=16)
+
+    with pytest.warns(UserWarning, match="on_error='return_none'"):
+        img, md = read_thorlabs_raw(
+            str(raw_path),
+            on_error="return_none",
+            verbose=False)
 
     assert img is None
     assert md is None
@@ -3377,7 +3444,7 @@ def test_read_thorlabs_raw_xml_date_parse_fail_does_not_crash(tmp_path):
     assert img is not None
     assert md is not None
 
-def test_read_thorlabs_raw_numpy_size_mismatch_warns_and_returns_none(tmp_path):
+def test_read_thorlabs_raw_numpy_size_mismatch_raises(tmp_path):
     T, Z, C, Y, X = 1, 2, 1, 4, 4
     raw_path = tmp_path / "x.raw"
     xml_path = tmp_path / "x.xml"
@@ -3386,13 +3453,10 @@ def test_read_thorlabs_raw_numpy_size_mismatch_warns_and_returns_none(tmp_path):
     np.arange(10, dtype=np.uint16).tofile(str(raw_path))
     _write_thorlabs_xml_variant(xml_path, X=X, Y=Y, C_attr=C, T=T, Z=Z, bits=16)
 
-    with pytest.warns(UserWarning, match="RAW data size mismatch"):
-        img, md = read_thorlabs_raw(str(raw_path), zarr_store=None, verbose=False)
+    with pytest.raises(ValueError, match="not an integer multiple"):
+        read_thorlabs_raw(str(raw_path), zarr_store=None, verbose=False)
 
-    assert img is None
-    assert md is None
-
-def test_read_thorlabs_raw_zarr_size_mismatch_warns_and_returns_none(tmp_path):
+def test_read_thorlabs_raw_zarr_size_mismatch_raises(tmp_path):
     T, Z, C, Y, X = 1, 2, 1, 4, 4
     raw_path = tmp_path / "x.raw"
     xml_path = tmp_path / "x.xml"
@@ -3400,11 +3464,8 @@ def test_read_thorlabs_raw_zarr_size_mismatch_warns_and_returns_none(tmp_path):
     np.arange(10, dtype=np.uint16).tofile(str(raw_path))
     _write_thorlabs_xml_variant(xml_path, X=X, Y=Y, C_attr=C, T=T, Z=Z, bits=16)
 
-    with pytest.warns(UserWarning, match="RAW data size mismatch"):
-        img, md = read_thorlabs_raw(str(raw_path), zarr_store="memory", verbose=False)
-
-    assert img is None
-    assert md is None
+    with pytest.raises(ValueError, match="not an integer multiple"):
+        read_thorlabs_raw(str(raw_path), zarr_store="memory", verbose=False)
 
 def test_read_thorlabs_raw_yaml_optional_parse_fail_is_ignored(tmp_path):
     raw_path = tmp_path / "x.raw"

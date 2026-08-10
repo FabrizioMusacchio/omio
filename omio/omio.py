@@ -3791,10 +3791,16 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
                 raise ValueError("Invalid dimension product for file size check.")
 
             if file_size % denom != 0:
-                if verbose:
-                    print(f"  WARNING: RAW file size {file_size} is not an integer multiple of\n"
-                        f"           X*Y*C*T*bytes_per_pixel={denom}. Z_from_file_size will be truncated.")
+                raise ValueError(
+                    f"RAW file size {file_size} is not an integer multiple of "
+                    f"X*Y*C*T*bytes_per_pixel={denom}."
+                )
             Z_from_file_size = file_size // denom
+            if Z_from_file_size <= 0:
+                raise ValueError(
+                    f"RAW file size {file_size} and XML dimensions imply invalid "
+                    f"Z_from_file_size={Z_from_file_size}."
+                )
             if Z != Z_from_file_size:
                 if verbose:
                     print(f"    Info: Z from XML ({Z}) does not match file size calculation ({Z_from_file_size}).\n"
@@ -3890,7 +3896,7 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
             metadata["SizeZ"] = Z
 
             # Unit and physical sizes are optional in YAML
-            unit_from_meta = ymd.get("pixelunit", None)
+            unit_from_meta = ymd.get("pixelunit", ymd.get("PixelUnit", None))
             if unit_from_meta is not None:
                 metadata["unit"] = str(unit_from_meta)
 

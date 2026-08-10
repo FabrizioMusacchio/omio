@@ -10,6 +10,22 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
+## 🚀 OMIO v0.2.8
+
+August 10, 2026
+
+This maintenance release fixes an additional Thorlabs RAW XML/YAML fallback edge case observed in batch workflows.
+
+### 📃 Changes
+#### 🧩 Changed
+* Thorlabs XML metadata whose dimensions are inconsistent with the RAW file size now trigger the same YAML fallback instead of deriving invalid dimensions such as `Z=0`.
+* Thorlabs YAML metadata now accepts both `pixelunit` and `PixelUnit` for the pixel-size unit field.
+
+#### 🧪 Testing and robustness
+* Added regression coverage for XML dimensions that are internally parseable but inconsistent with the RAW file size.
+
+---
+
 ## 🚀 OMIO v0.2.7
 
 August 07, 2026

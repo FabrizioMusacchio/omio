@@ -138,8 +138,8 @@ Terminal output during reading:
 In such cases, you can provide a YAML file with the required metadata as a fallback. The
 same fallback is used when a Thorlabs XML file is present but incomplete or inconsistent,
 for example when the original XML file is corrupt but should remain in the acquisition
-folder for provenance. The YAML file must be located in the same folder as the RAW file
-and has the following structure:
+folder for provenance, or when XML dimensions do not match the RAW file size. The YAML
+file must be located in the same folder as the RAW file and has the following structure:
 
 .. code-block:: yaml
 
