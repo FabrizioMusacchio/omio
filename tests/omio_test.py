@@ -3176,6 +3176,52 @@ def test_read_thorlabs_raw_yaml_missing_required_key_warns_and_returns_list_none
     assert images == [None]
     assert mds == [None]
 
+def test_read_thorlabs_raw_yaml_size_mismatch_warns_with_yaml_context_numpy(tmp_path):
+    raw_path = tmp_path / "example.raw"
+    yaml_path = tmp_path / "meta.yaml"
+
+    _write_dummy_raw(raw_path, T=1, Z=1, C=1, Y=4, X=4, dtype=np.uint16)
+    _write_yaml(
+        yaml_path,
+        {
+            "T": 1,
+            "Z": 2,
+            "C": 1,
+            "Y": 4,
+            "X": 4,
+            "bits": 16,
+        },
+    )
+
+    with pytest.warns(UserWarning, match="YAML metadata"):
+        image, md = read_thorlabs_raw(str(raw_path), zarr_store=None, verbose=False)
+
+    assert image is None
+    assert md is None
+
+def test_read_thorlabs_raw_yaml_size_mismatch_warns_with_yaml_context_zarr(tmp_path):
+    raw_path = tmp_path / "example.raw"
+    yaml_path = tmp_path / "meta.yaml"
+
+    _write_dummy_raw(raw_path, T=1, Z=1, C=1, Y=4, X=4, dtype=np.uint16)
+    _write_yaml(
+        yaml_path,
+        {
+            "T": 1,
+            "Z": 2,
+            "C": 1,
+            "Y": 4,
+            "X": 4,
+            "bits": 16,
+        },
+    )
+
+    with pytest.warns(UserWarning, match="YAML metadata"):
+        image, md = read_thorlabs_raw(str(raw_path), zarr_store="memory", verbose=False)
+
+    assert image is None
+    assert md is None
+
 def test_read_thorlabs_raw_multiple_yaml_files_warns_but_reads_first(tmp_path):
     # Behavior is intentionally platform dependent regarding which YAML is "first".
     # We therefore accept either outcome, but require that a warning is emitted and

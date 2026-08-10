@@ -3987,6 +3987,16 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
         dtype = np.uint8
 
     expected_elements = T * Z * C * Y * X
+    metadata_source = metadata.get("original_metadata_type", "")
+    if metadata_source == "thorlabs_yaml_metadata":
+        size_mismatch_msg = (
+            f"RAW data size mismatch after YAML metadata fallback: expected "
+            f"{expected_elements} elements from YAML metadata, got {{actual_elements}}. "
+            "Check the YAML dimensions and bit depth.")
+    else:
+        size_mismatch_msg = (
+            f"RAW data size mismatch: expected {expected_elements} elements, "
+            "got {actual_elements}. Check XML/YAML metadata.")
 
     if zarr_store is None:
         if verbose:
@@ -3995,9 +4005,7 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
             raw_data = np.frombuffer(f.read(), dtype=dtype)
 
         if raw_data.size != expected_elements:
-            warnings.warn(
-                f"RAW data size mismatch: expected {expected_elements} elements, got {raw_data.size}. "
-                "Check XML/YAML metadata.")
+            warnings.warn(size_mismatch_msg.format(actual_elements=raw_data.size))
             if return_list:
                 return [None], [None]
             return None, None
@@ -4011,9 +4019,7 @@ def read_thorlabs_raw(fname, physicalsize_xyz=None, pixelunit="micron",
         raw_data = np.memmap(fname, dtype=dtype, mode="r")
 
         if raw_data.size != expected_elements:
-            warnings.warn(
-                f"RAW data size mismatch: expected {expected_elements} elements, got {raw_data.size}. "
-                "Check XML/YAML metadata.")
+            warnings.warn(size_mismatch_msg.format(actual_elements=raw_data.size))
             if return_list:
                 return [None], [None]
             return None, None

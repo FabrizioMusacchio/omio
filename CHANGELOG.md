@@ -10,6 +10,19 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
+## 🔜 OMIO v0.2.9 unreleased
+
+This upcoming maintenance release improves Thorlabs RAW YAML fallback diagnostics.
+
+### 📃 Changes
+#### 🧩 Changed
+* Thorlabs RAW size-mismatch warnings now explicitly identify YAML metadata as the source when a YAML fallback was used but its dimensions or bit depth do not match the RAW file.
+
+#### 🧪 Testing and robustness
+* Added regression coverage for YAML-derived RAW size mismatches in both NumPy and Zarr-backed Thorlabs RAW reads.
+
+---
+
 ## 🚀 OMIO v0.2.8
 
 August 10, 2026
