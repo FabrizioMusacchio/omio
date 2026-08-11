@@ -80,3 +80,9 @@ copybutton_selector = "div.highlight pre"
 
 html_static_path = ['_static']
 html_logo = "_static/figures/OMIO_logo_wide_transparent_descr.png"
+
+html_theme_options = {
+    "navigation_depth": 5,
+    "collapse_navigation": False,
+    "sticky_navigation": True,
+}
