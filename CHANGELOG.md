@@ -9,136 +9,138 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
-## 🔜 OMIO v0.2.10 - UNRELEASED
+### 🔜 OMIO v0.2.10 - UNRELEASED
+
+tba
 
 ---
 
-## 🚀 OMIO v0.2.9
+### 🚀 OMIO v0.2.9
 
 August 11, 2026
 
 This maintenance release improves Thorlabs RAW YAML fallback diagnostics.
 
-### 📃 Changes
-#### 🧩 Changed
+#### 📃 Changes
+##### 🧩 Changed
 * Thorlabs RAW size-mismatch warnings now explicitly identify YAML metadata as the source when a YAML fallback was used but its dimensions or bit depth do not match the RAW file.
 
-#### 🧪 Testing and robustness
+##### 🧪 Testing and robustness
 * Added regression coverage for YAML-derived RAW size mismatches in both NumPy and Zarr-backed Thorlabs RAW reads.
 
 ---
 
-## 🚀 OMIO v0.2.8
+### 🚀 OMIO v0.2.8
 
 August 10, 2026
 
 This maintenance release fixes an additional Thorlabs RAW XML/YAML fallback edge case observed in batch workflows.
 
-### 📃 Changes
-#### 🧩 Changed
+#### 📃 Changes
+##### 🧩 Changed
 * Thorlabs XML metadata whose dimensions are inconsistent with the RAW file size now trigger the same YAML fallback instead of deriving invalid dimensions such as `Z=0`.
 * Thorlabs YAML metadata now accepts both `pixelunit` and `PixelUnit` for the pixel-size unit field.
 
-#### 🧪 Testing and robustness
+##### 🧪 Testing and robustness
 * Added regression coverage for XML dimensions that are internally parseable but inconsistent with the RAW file size.
 
 ---
 
-## 🚀 OMIO v0.2.7
+### 🚀 OMIO v0.2.7
 
 August 07, 2026
 
 This maintenance release improves robustness of Thorlabs RAW metadata discovery.
 
-### 📃 Changes
-#### 🧩 Changed
+#### 📃 Changes
+##### 🧩 Changed
 * The Thorlabs RAW reader now ignores hidden dot XML files such as `._Experiment.xml` and `.Experiment.xml` when looking for XML metadata.
 * If a Thorlabs XML metadata file is present but incomplete or inconsistent, `read_thorlabs_raw` now falls back to a valid YAML metadata file in the same folder instead of aborting immediately.
 * Added `on_error="raise"|"return_none"` to `imread` and `read_thorlabs_raw` so batch workflows can opt into `(None, None)` returns for unrecoverable Thorlabs RAW metadata problems.
 
-#### 🧪 Testing and robustness
+##### 🧪 Testing and robustness
 * Added regression coverage for Thorlabs RAW folders that contain hidden dot XML sidecar files next to the real metadata XML.
 * Added regression coverage for user-repaired Thorlabs RAW folders where a broken XML file remains next to a valid YAML metadata fallback.
 * Added regression coverage for strict and batch-friendly Thorlabs RAW error policies.
 
 ---
 
-## 🚀 OMIO v0.2.6
+### 🚀 OMIO v0.2.6
 
 July 29, 2026
 
 This small maintenance release improves memory efficiency when exporting large Zarr-backed OMIO arrays to OME-TIFF.
 
-### 📃 Changes
-#### 🧩 Changed
+#### 📃 Changes
+##### 🧩 Changed
 * `imwrite` now writes Zarr-backed inputs plane-wise instead of materializing the full Zarr store with `np.asarray`.
 * Zarr-backed `imwrite` exports still use the same OME-TIFF writer axis layout as before and remain compatible with OMIO readback to canonical `TZCYX`.
 
-#### 📚 Documentation
+##### 📚 Documentation
 * Added Large File Handling documentation for memory-aware OME-TIFF export from Zarr-backed OMIO arrays.
 * Extended the interactive usage example with a disk-backed Zarr-to-OME-TIFF `imwrite` workflow and roundtrip check.
 
-#### 🧪 Testing and robustness
+##### 🧪 Testing and robustness
 * Added regression coverage to ensure Zarr-backed `imwrite` does not perform full-array materialization while preserving OME-TIFF axis semantics and OMIO roundtrip behavior.
 
 ---
 
-## 🚀 OMIO v0.2.5
+### 🚀 OMIO v0.2.5
 
 July 28, 2026
 
 This maintenance release adds configurable on-disk cache locations for `imread` workflows.
 
-### 📃 Changes
-#### ✨ Added
+#### 📃 Changes
+##### ✨ Added
 * Added `zarr_store_path` to `imread` and the underlying TIFF, CZI, and Thorlabs RAW readers.
 * `imread(..., zarr_store="disk", zarr_store_path=<path>)` now creates `.omio_cache` under the provided path instead of next to the source file.
 * Disk-cache metadata returned by `imread` now records `omio_cache_folder`, `omio_zarr_store_path`, `omio_zarr_store_name`, and `omio_zarr_store_type` for disk-backed reads.
 
-#### 🧩 Changed
+##### 🧩 Changed
 * `reuse_disk_cache=True` now checks the custom `zarr_store_path` location when one is provided, enabling reuse of local caches for source files stored on a server or external drive.
 
-#### 📚 Documentation
+##### 📚 Documentation
 * Added an interactive tutorial example showing how to create and reuse a local OMIO disk cache via `zarr_store_path`.
 
-#### 🧪 Testing and robustness
+##### 🧪 Testing and robustness
 * Added regression tests for custom `zarr_store_path` cache creation and reuse through both `read_tif` and public `imread`.
 
 ---
 
-## 🚀 OMIO v0.2.4
+### 🚀 OMIO v0.2.4
 
 July 27, 2026
 
 This small follow-up release refines Napari layer naming so custom channel names remain grouped under the resolved image name.
 
-### 📃 Changes
-#### 🧩 Changed
+#### 📃 Changes
+##### 🧩 Changed
 * `open_in_napari(..., layer_names=[...])` now prefixes custom channel/layer names with the resolved image name, keeping layer lists grouped and readable in Napari.
 
-#### 📚 Documentation
+##### 📚 Documentation
 * Updated Napari examples in the interactive tutorial and Read the Docs pages to show image-name-prefixed per-channel `layer_names`.
 
-#### 🧪 Testing and robustness
+##### 🧪 Testing and robustness
 * Added regression coverage for custom `layer_names` together with explicit `image_name` and metadata-derived image names.
 
 ---
 
-## 🚀 OMIO v0.2.3
+### 🚀 OMIO v0.2.3
 
 July 27, 2026
 
 This maintenance release improves documentation consistency across OMIO's main public API, extends disk-backed template-image workflows, and makes Napari visualization more convenient and customizable.
 
-### 📃 Changes
-#### ✨ Added
+#### 📃 Changes
+##### ✨ Added
 * Extended `create_empty_image` for disk-backed Zarr workflows via `zarr_store="disk"` together with `zarr_store_path`.
 * Disk-backed empty images now record `omio_cache_folder`, `omio_zarr_store_path`, `omio_zarr_store_name`, and `omio_zarr_store_type` in the returned metadata.
 * Disk-backed empty-image Zarr stores now persist OMIO metadata and cache information in their Zarr attributes.
 * Added `image_name`, `layer_names`, and `blending` options to `open_in_napari`.
 * `open_in_napari(..., image_name=None)` now derives layer names from OMIO metadata such as `Annotations["original_filename"]` when available.
 
-#### 🧩 Changed
+##### 🧩 Changed
 * `create_empty_image(..., zarr_store="disk")` now uses `zarr_store_name="empty_image"` when no explicit store name is provided.
 * `cleanup_omio_cache` can now remove a directly provided `.omio_cache` folder, enabling cleanup via `om.cleanup_omio_cache(my_metadata["omio_cache_folder"], full_cleanup=True)`.
 * Napari layers now use `blending="additive"` by default, while still allowing any Napari-supported blending mode to be passed through.
@@ -156,43 +158,43 @@ This maintenance release improves documentation consistency across OMIO's main p
 
 ---
 
-## 🚀 OMIO v0.2.2
+### 🚀 OMIO v0.2.2
 
 June 12, 2026
 
 This maintenance release adds validated reuse of OMIO's on-disk Zarr caches and stores enough OMIO metadata inside each cache to reopen compatible datasets without rereading the original microscopy file.
 
-### 📃 Changes
-#### ✨ Added
+#### 📃 Changes
+##### ✨ Added
 * Added opt-in disk-cache reuse for `imread(..., zarr_store="disk", reuse_disk_cache=True)`.
 * Compatible existing `.omio_cache/<basename>.zarr` stores can now be reopened directly instead of being rebuilt from the source file.
 * Added persisted OMIO cache manifests for disk-backed TIFF, CZI, and Thorlabs RAW reads.
 * Added persisted OMIO metadata payloads for disk-backed TIFF, CZI, and Thorlabs RAW reads, enabling cache reuse without reopening the original source image for metadata extraction.
 
-#### 🧩 Changed
+##### 🧩 Changed
 * OMIO now stores disk-cache metadata and cache validation info directly in Zarr attributes, which are persisted in the store's `zarr.json` under the current Zarr v3 layout.
 * Disk-cache reuse is validated against source path, file size, modification time, OMIO version, reader/backend identity, pixel unit, and any explicit physical-size overrides before reuse is allowed.
 * If a disk cache is missing OMIO metadata, missing cache info, stale, or otherwise incompatible, OMIO now falls back automatically to a full rebuild and refreshes the cache in place.
 
-#### 🧪 Testing and robustness
+##### 🧪 Testing and robustness
 * Added regression tests covering persisted disk-cache metadata payloads for TIFF-backed Zarr caches.
 * Added regression tests verifying that TIFF, CZI, and Thorlabs RAW readers can reopen compatible disk caches without rereading the original source files.
 * Added regression tests covering fallback behavior when a stale or incomplete disk cache is encountered.
 
-#### 📚 Documentation and citation
+##### 📚 Documentation and citation
 * OMIO is now described in a dedicated preprint that can be cited in academic work:
   * DOI: [10.64898/2026.06.09.731118](https://doi.org/10.64898/2026.06.09.731118)
 
 ---
 
-## 🚀 OMIO v0.2.1
+### 🚀 OMIO v0.2.1
 
 May 13, 2026
 
 This maintenance release restores compatibility with recent `czifile`, `tifffile`, and `zarr`/Dask dependency revisions and keeps OMIO's CZI, TIFF, conversion, and napari-cache workflows working across both legacy and current APIs.
 
-### 📃 Changes
-#### 🧩 Fixed
+#### 📃 Changes
+##### 🧩 Fixed
 * Restored CZI reader compatibility with `czifile` `2026.4.30` and newer.
 * `read_czi` now resolves axes via scene metadata when `CziFile.axes` is no longer available.
 * `read_czi` now retrieves structured CZI metadata via `metadata(asdict=True)` when the older `metadata(raw=False)` API is unavailable.
@@ -201,39 +203,39 @@ This maintenance release restores compatibility with recent `czifile`, `tifffile
 * `read_tif` now uses `shaped_metadata` as a fallback axis source when `tifffile` drops singleton axes such as `T=1` or `Z=1`.
 * Restored compatibility with current `dask.array.to_zarr` / `zarr` behavior by switching napari-cache writes away from the deprecated `zarr_read_kwargs` path and to the current `mode="w"` API.
 
-#### 🧪 Testing and robustness
+##### 🧪 Testing and robustness
 * Added regression tests covering both legacy and current `czifile` CZI-reader APIs.
 * Added regression tests covering TIFF axis fallback from `shaped_metadata` when singleton dimensions are omitted from `series[0].axes`.
 * Full `pytest` suite passes again under the current dependency set.
 
-#### 🎨 Project identity
+##### 🎨 Project identity
 * OMIO has its first own logo now! (December 30, 2025) That's cool, but does not affect functionality or justify a dedicated release on its own.
 
 
 
 --- 
 
-## 🚀 OMIO v0.2.0
+### 🚀 OMIO v0.2.0
 
 December 29, 2025
 
 This release introduces a more consistent public API, improves TIFF and OME-TIFF handling (including multi-file OME-TIFF series and paginated stacks), strengthens napari visualization robustness, and significantly expands documentation and example data.
 
-### 📃 Changes
-#### ✨ Highlights
+#### 📃 Changes
+##### ✨ Highlights
 
 * API consolidation: `write_ometiff` has been renamed to `imwrite` to align with `imread` and `imconvert`.
 * Improved TIFF family robustness: better physical pixel size handling, clearer container policies, and correct behavior for multi-file OME-TIFF series.
 * More robust napari visualization: clearer viewer summaries and safeguards against accidental loss of spatial axes.
 * Major documentation expansion and a Zenodo-hosted example dataset for tutorials and testing.
 
-#### ⚠️ Breaking changes
+##### ⚠️ Breaking changes
 * `write_ometiff` → `imwrite`
   * Rationale: improves naming consistency across the core API (compared to `imread` and `imconvert`).
   * Migration: replace `write_ometiff(...)` with `imwrite(...)`.
 
 
-#### 🧬 TIFF and LSM reading improvements
+##### 🧬 TIFF and LSM reading improvements
 * `read_tif` now emits explicit warnings when `PhysicalSizeX`, `PhysicalSizeY`, or `PhysicalSizeZ` cannot be read from metadata and default or user-provided values are used instead.
 * Improved fallback extraction of physical pixel sizes from TIFF tags when `imagej_metadata` is incomplete.
   * `_standardize_imagej_metadata` has been extended accordingly.
@@ -242,27 +244,27 @@ This release introduces a more consistent public API, improves TIFF and OME-TIFF
 * README and `read_tif` docstrings now explicitly document support for multi-file OME-TIFF series.
   * Passing the path of a single file is sufficient, as OMIO reconstructs the full logical dataset via OME-XML references.
 
-#### 📁 Folder reading and OME-TIFF series detection
+##### 📁 Folder reading and OME-TIFF series detection
 * `imread` now correctly detects multi-file OME-TIFF series when a folder path is provided.
   * Previous behavior could incorrectly treat all TIFF files in a folder as independent images. This is now fixed.
 * The same fix propagates to `imconvert` and `bids_batch_convert`.
 
 
-#### 🆕 New utility function
+##### 🆕 New utility function
 * Added `create_thorlabs_raw_yaml`.
   * Allows users to generate an empty `experiment.yaml` template for Thorlabs RAW folders when `Experiment.xml` is missing.
 
-#### 👁️ Napari visualization updates
+##### 👁️ Napari visualization updates
 * Improved the final status message of the napari opener.
   * Now prints a concise summary including layer names, scales, and shapes.
 * Added internal safety checks to prevent spatial axes `X` and `Y` from being squeezed away when their dimension equals 1.
 
-#### 🛠️ Utilities and tests
+##### 🛠️ Utilities and tests
 * `test_all_readers_with_dummy_data.py` now generates more informative dummy data.
   * Dummy TIFF files include text annotations.
   * Additional folder structures are created to demonstrate batch processing and folder handling behavior.
 
-#### 📚 Documentation
+##### 📚 Documentation
 Expanded and reorganized documentation, including:
 
 * A Core Workflow guide covering reading, inspecting, viewing, and writing images, with examples for `imread`, `imwrite`, and `imconvert`.
@@ -277,11 +279,11 @@ Expanded and reorganized documentation, including:
 * A new section on batch conversion over a BIDS-like tree using `bids_batch_convert`.
 
 
-#### 🧪 Example dataset
+##### 🧪 Example dataset
 * Added a Zenodo-hosted example dataset containing artificially generated toy data and selected publicly available real-world microscopy data for tutorials and testing.
   * DOI: [10.5281/zenodo.18078231](https://doi.org/10.5281/zenodo.18078231)
 
-#### 📝 Notes for maintainers
+##### 📝 Notes for maintainers
 * Verify that all documentation and examples consistently use `imwrite`.
 * Ensure that references to `write_ometiff` are removed or updated.
 * Highlight the API rename prominently in upgrade notes and downstream documentation.
@@ -289,28 +291,28 @@ Expanded and reorganized documentation, including:
 
 ---
 
-## 🚀 OMIO v0.1.4
+### 🚀 OMIO v0.1.4
 
 Dec 23, 2025
 
 This release focuses on improving documentation and usability.
 
-### 📃 Changes
-#### 📚 Citation and Archiving
+#### 📃 Changes
+##### 📚 Citation and Archiving
 * OMIO releases are now linked to [Zenodo](https://zenodo.org/records/18030883), enabling long-term archiving and versioned software snapshots.
 * A Zenodo DOI ([10.5281/zenodo.18030883](https://zenodo.org/records/18030883)) is associated with the project, making OMIO formally citable in scientific publications.
 * Citation metadata has been added to the repository to document the preferred citation form.
 
-#### 📖 Documentation Updates
+##### 📖 Documentation Updates
 * The README has been revised to correct and clarify several example usage snippets.
 * Example code now reflects the current public API and recommended usage patterns more accurately.
 
-#### 🔎 Notes
+##### 🔎 Notes
 This release focuses on establishing a stable citation and archiving workflow and on improving the reliability of user-facing documentation. No changes to the core API or reader behavior were introduced.
 
 --- 
 
-## 🚀 OMIO v0.1.3
+### 🚀 OMIO v0.1.3
 
 Dec 23, 2025
 
@@ -318,18 +320,18 @@ This is just a dummy release for connecting the repository to Zenodo.
 
 ---
 
-## 🚀 OMIO v0.1.2
+### 🚀 OMIO v0.1.2
 
 Dec 23, 2025
 
 This release is a small maintenance update.
 
-### 📃 Changes
-#### 🧩 Fixed
+#### 📃 Changes
+##### 🧩 Fixed
 * Correctly resolve the installed package version at runtime when OMIO is distributed under the PyPI name **omio-microscopy** while being imported as `omio`.
 * Ensure the reported OMIO version now matches the version defined in `pyproject.toml`.
 
-#### 🧪 Quality
+##### 🧪 Quality
 * All existing tests pass with the corrected version handling.
 * No API or behavior changes for users beyond the version fix.
 
@@ -338,56 +340,56 @@ This release prepares OMIO for stable use via `pip install omio-microscopy` whil
 
 ---
 
-## 🚀 OMIO v0.1.1
+### 🚀 OMIO v0.1.1
 
 Dec 23, 2025
 
 This is the first public release of **OMIO (Open Microscopy Image I/O)**, providing a unified, reproducible, and OME-compliant image loading layer for bioimaging and microscopy data.
 
-### 📃 Changes
-#### ✨ Highlights
+#### 📃 Changes
+##### ✨ Highlights
 OMIO v0.1.1 establishes the core design principles of the project: a single, canonical in-memory representation for microscopy images and metadata, explicit handling of OME axes, and robust support for large datasets via Zarr.
 
-#### 🧠 Core Functionality
+##### 🧠 Core Functionality
 * Unified image reading interface for common microscopy formats, including TIFF, OME-TIFF, LSM, CZI, and Thorlabs RAW.
 * Canonical internal image representation using the OME axis order **TZCYX**.
 * Automatic axis normalization, validation, and correction based on file metadata.
 * Consistent metadata handling aligned with OME concepts, including physical pixel sizes, time increments, and axis annotations.
 * Explicit provenance tracking of original filenames, file types, and metadata sources.
 
-#### 🔬 Thorlabs RAW Support
+##### 🔬 Thorlabs RAW Support
 * Native reading of Thorlabs RAW files using accompanying XML metadata.
 * YAML metadata fallback when XML metadata is unavailable, enabling reproducible interpretation of legacy or incomplete datasets.
 * Automatic correction of Z dimension inconsistencies based on RAW file size.
 * Optional memory-efficient Zarr output for large RAW datasets, with slice-wise copying to limit peak RAM usage.
 
-#### 📦 Zarr Integration
+##### 📦 Zarr Integration
 * Optional output as NumPy arrays or Zarr arrays (in-memory or on-disk).
 * Automatic chunk size computation based on image shape and axis order.
 * Incremental writing strategies to support large files and interactive environments.
 
-#### 👁️ Napari Integration
+##### 👁️ Napari Integration
 * Built-in Napari viewer utilities for interactive inspection of OMIO-loaded images.
 * Automatic handling of OME axes and dimensionality for Napari display.
 * Support for efficient visualization of large Zarr-backed datasets without full materialization in memory.
 
-#### 🔗 Merging and Utilities
+##### 🔗 Merging and Utilities
 * Concatenation of compatible 5D image stacks along selected OME axes.
 * Optional zero-padding to merge datasets with mismatched non-merge dimensions.
 * Robust handling of filename collisions and metadata provenance during merge operations.
 * Helper utilities for Zarr group inspection, metadata recovery, and axis consistency checks.
 
-#### 🧪 Testing and Robustness
+##### 🧪 Testing and Robustness
 * Extensive automated test coverage across readers, edge cases, and failure modes.
 * Synthetic test data for RAW and TIFF paths, complemented by small CC BY 4.0 test images for CZI and LSM formats.
 * Clear warning and error behavior for incomplete metadata, unsupported configurations, and inconsistent inputs.
 
-#### 📦 Packaging
+##### 📦 Packaging
 * First PyPI release under the distribution name **omio-microscopy**.
 * Importable Python package name remains **omio**.
 * Python 3.12 or newer required.
 
-#### 🔭 Scope and Outlook
+##### 🔭 Scope and Outlook
 This release focuses on correctness, transparency, and reproducibility rather than maximal format coverage. OMIO is designed as a stable foundation for downstream analysis pipelines, where consistent axis semantics and metadata integrity are critical.
 
 Future releases will expand format support, refine metadata policies, and further improve performance and interoperability with downstream bioimaging tools.

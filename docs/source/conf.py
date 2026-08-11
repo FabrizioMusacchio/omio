@@ -72,8 +72,8 @@ mathjax3_config = {
     }
 }
 
-# allow copy button only for Python highlights:
-copybutton_selector = "div.highlight-python pre"
+# allow copy button for all code blocks, not just Python code blocks
+copybutton_selector = "div.highlight pre"
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
