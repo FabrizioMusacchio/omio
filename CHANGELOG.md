@@ -10,7 +10,7 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
-## 🔜 OMIO v0.2.9
+## 🚀 OMIO v0.2.9
 
 August 11, 2026
 
