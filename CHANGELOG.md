@@ -10,9 +10,11 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
-## 🔜 OMIO v0.2.9 unreleased
+## 🔜 OMIO v0.2.9
 
-This upcoming maintenance release improves Thorlabs RAW YAML fallback diagnostics.
+August 11, 2026
+
+This maintenance release improves Thorlabs RAW YAML fallback diagnostics.
 
 ### 📃 Changes
 #### 🧩 Changed
