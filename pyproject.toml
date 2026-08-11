@@ -28,7 +28,8 @@ dependencies = [
     "numcodecs",
     "tqdm",
     "pyyaml",
-    "napari[all]"
+    "napari[all]",
+    "ipykernel"
 ]
 
 
@@ -42,7 +43,12 @@ Tracker = "https://github.com/FabrizioMusacchio/omio/issues"
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "pytest-cov"
+    "pytest-cov",
+    "sphinx",
+    "sphinx-autodoc-typehints",
+    "sphinx-rtd-theme",
+    "myst-parser",
+    "sphinx-copybutton"
 ]
 
 [tool.flit.module]
