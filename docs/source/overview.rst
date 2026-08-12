@@ -69,7 +69,8 @@ explicit and documented policies rather than hidden heuristics.
 Memory aware by construction
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Large datasets can be processed via Zarr and Dask without loading entire volumes
+Large datasets can be processed via :doc:`Zarr and Dask <usage_large_files>` 
+without loading entire volumes
 into memory. Chunk aligned copying, cache based workflows, and memory mapped
 access are first class concepts and allow both out of core processing and
 interactive visualization in napari.
@@ -117,10 +118,12 @@ provenance information into metadata annotations.
 Folder based and BIDS like workflows
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-OMIO supports structured folder traversal for large projects, including reading
-all files in a folder, merging multiple files within a folder, merging structured
-folder stacks, and batch processing of BIDS like directory hierarchies. These
-workflows reflect how microscopy data are commonly organized in practice.
+OMIO supports 
+:doc:`structured folder traversal for large projects <usage_folder_reading>`,
+including reading all files in a folder, merging multiple files within a 
+folder, merging structured folder stacks, and 
+:doc:`batch processing of BIDS like directory hierarchies <usage_batch_conversion>`.
+These workflows reflect how microscopy data are commonly organized in practice.
 
 OME TIFF export
 ^^^^^^^^^^^^^^^^^^^^^
@@ -170,18 +173,22 @@ pipelines.
 Its purpose is to provide a reliable, explicit, and reproducible I/O layer on
 which such pipelines can be built.
 
+.. note::
 
-Installation
-------------
+   **What about Bio-Formats?**
 
-Please refer to the :doc:`installation instructions <installation>`.
+   Bio-Formats is an excellent and very broad microscopy file format ecosystem.
+   OMIO deliberately does not depend on Bio-Formats by default, though, because
+   Bio-Formats is a Java library and the common Python routes access it through
+   a Java/JVM layer. One of OMIO's goals is to remain lightweight and easy to
+   install across platforms, avoiding a mandatory Java dependency and the
+   additional packaging or runtime complexity that can come with it.
 
-
-Further reading
----------------
-
-Detailed usage examples, API documentation, and contribution guidelines are
-available in the remaining sections of this documentation. 
+   This is a scope decision, not a dismissal of Bio-Formats. OMIO is
+   extensible: When support for another format is 
+   :doc:`requested <contributing>` and a dedicated
+   pure-Python reader exists or can reasonably be implemented, format support
+   can be added directly.
 
 
 .. _license:
@@ -248,4 +255,3 @@ the `OMIO repository <https://github.com/FabrizioMusacchio/OMIO>`_ or contact th
 directly:
 
 | **Fabrizio Musacchio**: `Email <mailto:fabrizio.musacchio@dzne.de>`_ | `GitHub <https://github.com/FabrizioMusacchio>`_ | `Website <https://www.fabriziomusacchio.com>`_
-

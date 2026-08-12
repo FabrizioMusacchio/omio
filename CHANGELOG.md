@@ -7,11 +7,15 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 [![Zenodo Archive](https://img.shields.io/badge/Zenodo%20Archive-10.5281%2Fzenodo.18030883-blue)](https://doi.org/10.5281/zenodo.18030883)
 
-<!-- ---
+---
 
 ### 🔜 OMIO v0.2.10 - UNRELEASED
 
-tba -->
+This upcoming maintenance release improves documentation around OMIO's project scope.
+
+#### 📃 Changes
+##### 📚 Documentation
+* Clarified OMIO's scope relative to Bio-Formats, explaining why Bio-Formats is not a default dependency and how OMIO can still be extended through dedicated pure-Python readers.
 
 ---
 
