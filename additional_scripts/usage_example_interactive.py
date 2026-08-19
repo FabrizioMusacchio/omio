@@ -145,8 +145,6 @@ om.open_in_napari(image, metadata, verbose=False,
                   image_name="my image",
                   layer_names=["channel 0", "channel 1", "channel 2"], 
                   blending="additive")
-
-
 # %% ENSURED OME-COMPLIANCE UPON READING
 """
 OMIO ensures OME-compliance of the read image and metadata upon reading. This accounts
