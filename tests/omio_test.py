@@ -108,7 +108,7 @@ def test_batch_correct_single_image_calls_corrector(monkeypatch):
         return image, image.shape, "TZCYX"
 
     monkeypatch.setattr(
-        "omio.omio._correct_for_OME_axes_order",
+        "omio.core._correct_for_OME_axes_order",
         fake_correct
     )
 
@@ -143,7 +143,7 @@ def test_batch_correct_multiple_images(monkeypatch):
         return image, image.shape, new_axes
 
     monkeypatch.setattr(
-        "omio.omio._correct_for_OME_axes_order",
+        "omio.core._correct_for_OME_axes_order",
         fake_correct
     )
 
@@ -166,7 +166,7 @@ def test_batch_correct_accepts_zarr_arrays(monkeypatch):
         return image, image.shape, "TZCYX"
 
     monkeypatch.setattr(
-        "omio.omio._correct_for_OME_axes_order",
+        "omio.core._correct_for_OME_axes_order",
         fake_correct
     )
 
@@ -180,7 +180,7 @@ def test_batch_correct_verbose_false_suppresses_output(monkeypatch, capsys):
     metadatas = [{"axes": "YX"}]
 
     monkeypatch.setattr(
-        "omio.omio._correct_for_OME_axes_order",
+        "omio.core._correct_for_OME_axes_order",
         lambda image, md, memap_large_file=False, verbose=True: (image, image.shape, "TZCYX")
     )
 
@@ -595,7 +595,7 @@ def test_check_bigtiff_large_uncompressed_requires_bigtiff(monkeypatch):
     def fake_estimate(image, sample_fraction=0.001, compression_level=3):
         return limit + 1  # bleibt über Limit
 
-    monkeypatch.setattr("omio.omio._estimate_compressed_size", fake_estimate)
+    monkeypatch.setattr("omio.writers.ome_tiff._estimate_compressed_size", fake_estimate)
 
     use_bigtiff = _check_bigtiff(img, compression_level=3)
 
@@ -611,7 +611,7 @@ def test_check_bigtiff_large_but_compressible_resets_flag(monkeypatch):
     def fake_estimate(image, sample_fraction=0.001, compression_level=3):
         return 1024  # weit unter Limit
 
-    monkeypatch.setattr("omio.omio._estimate_compressed_size", fake_estimate)
+    monkeypatch.setattr("omio.writers.ome_tiff._estimate_compressed_size", fake_estimate)
 
     use_bigtiff = _check_bigtiff(img, compression_level=3)
 
@@ -627,7 +627,7 @@ def test_check_bigtiff_invalid_compression_level_propagates(monkeypatch):
     def fake_estimate(image, sample_fraction=0.001, compression_level=99):
         raise zlib.error("Bad compression level")
 
-    monkeypatch.setattr("omio.omio._estimate_compressed_size", fake_estimate)
+    monkeypatch.setattr("omio.writers.ome_tiff._estimate_compressed_size", fake_estimate)
 
     with pytest.raises(zlib.error):
         _check_bigtiff(img, compression_level=99)
@@ -1660,7 +1660,7 @@ def test_load_yaml_metadata_missing_pyyaml(monkeypatch, tmp_path):
     p = tmp_path / "meta.yaml"
     p.write_text("a: 1\n", encoding="utf-8")
 
-    monkeypatch.setattr("omio.omio.yaml", None)
+    monkeypatch.setattr("omio.readers.thorlabs_raw.yaml", None)
 
     with pytest.raises(ImportError, match="PyYAML is not installed"):
         _load_yaml_metadata(str(p))
@@ -2019,7 +2019,7 @@ def test_read_tif_physically_unreasonable_sizes_are_clamped_to_one(tmp_path, mon
             "PhysicalSizeZUnit": "micron",
         }
 
-    monkeypatch.setattr("omio.omio._parse_ome_metadata", fake_parse_ome_metadata)
+    monkeypatch.setattr("omio.readers.tif._parse_ome_metadata", fake_parse_ome_metadata)
 
     class FakeTiffFile:
         def __init__(self, real):
@@ -2237,10 +2237,10 @@ def test_read_tif_forced_paginated_axis_p_splits_into_pages(tmp_path, monkeypatc
         md["axes"] = "PYX"
         return md
 
-    monkeypatch.setattr("omio.omio._ensure_axes_in_metadata", fake_ensure_axes_in_metadata)
+    monkeypatch.setattr("omio.readers.tif._ensure_axes_in_metadata", fake_ensure_axes_in_metadata)
 
-    monkeypatch.setattr("omio.omio.OME_metadata_checkup", lambda md, verbose=False: md)
-    monkeypatch.setattr("omio.omio._batch_correct_for_OME_axes_order",
+    monkeypatch.setattr("omio.readers.tif.OME_metadata_checkup", lambda md, verbose=False: md)
+    monkeypatch.setattr("omio.readers.tif._batch_correct_for_OME_axes_order",
                         lambda imgs, mds, memap_large_file, verbose=False: (imgs, mds))
 
     images, metadatas = read_tif(str(f), verbose=False)
@@ -2265,10 +2265,10 @@ def test_read_tif_forced_paginated_axis_p_writes_page_zarr_outputs(tmp_path, mon
         md["axes"] = "PYX"
         return md
 
-    monkeypatch.setattr("omio.omio._ensure_axes_in_metadata", fake_ensure_axes_in_metadata)
-    monkeypatch.setattr("omio.omio.OME_metadata_checkup", lambda md, verbose=False: md)
+    monkeypatch.setattr("omio.readers.tif._ensure_axes_in_metadata", fake_ensure_axes_in_metadata)
+    monkeypatch.setattr("omio.readers.tif.OME_metadata_checkup", lambda md, verbose=False: md)
     monkeypatch.setattr(
-        "omio.omio._batch_correct_for_OME_axes_order",
+        "omio.readers.tif._batch_correct_for_OME_axes_order",
         lambda imgs, mds, memap_large_file, verbose=False: (imgs, mds),
     )
 
@@ -2599,7 +2599,7 @@ def test_read_czi_reuse_disk_cache_avoids_rereading_source(tmp_path, monkeypatch
     image1, md1 = read_czi(str(dst), zarr_store="disk", verbose=False)
 
     monkeypatch.setattr(
-        "omio.omio.czi.imread",
+        "omio.readers.czi.czi.imread",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("CZI source should not be reread")),
     )
 
@@ -2607,7 +2607,7 @@ def test_read_czi_reuse_disk_cache_avoids_rereading_source(tmp_path, monkeypatch
         def __init__(self, *args, **kwargs):
             raise AssertionError("CZI metadata source should not be reopened")
 
-    monkeypatch.setattr("omio.omio.czi.CziFile", FailCziFile)
+    monkeypatch.setattr("omio.readers.czi.czi.CziFile", FailCziFile)
 
     image2, md2 = read_czi(str(dst), zarr_store="disk", reuse_disk_cache=True, verbose=False)
 
@@ -2620,7 +2620,7 @@ def test_read_czi_accepts_new_czifile_scene_axes_and_asdict_metadata(monkeypatch
     dummy.write_bytes(b"dummy")
 
     monkeypatch.setattr(
-        "omio.omio.czi.imread",
+        "omio.readers.czi.czi.imread",
         lambda fname: np.arange(6, dtype=np.uint8).reshape(2, 3),
     )
 
@@ -2656,7 +2656,7 @@ def test_read_czi_accepts_new_czifile_scene_axes_and_asdict_metadata(monkeypatch
                 }
             }
 
-    monkeypatch.setattr("omio.omio.czi.CziFile", FakeCziFile)
+    monkeypatch.setattr("omio.readers.czi.czi.CziFile", FakeCziFile)
 
     image, md = read_czi(str(dummy), zarr_store=None, verbose=False)
 
@@ -2672,7 +2672,7 @@ def test_read_czi_falls_back_to_legacy_axes_and_raw_metadata(monkeypatch, tmp_pa
     dummy.write_bytes(b"dummy")
 
     monkeypatch.setattr(
-        "omio.omio.czi.imread",
+        "omio.readers.czi.czi.imread",
         lambda fname: np.arange(6, dtype=np.uint8).reshape(2, 3),
     )
 
@@ -2706,7 +2706,7 @@ def test_read_czi_falls_back_to_legacy_axes_and_raw_metadata(monkeypatch, tmp_pa
                 }
             }
 
-    monkeypatch.setattr("omio.omio.czi.CziFile", FakeLegacyCziFile)
+    monkeypatch.setattr("omio.readers.czi.czi.CziFile", FakeLegacyCziFile)
 
     image, md = read_czi(str(dummy), zarr_store=None, verbose=False)
 
@@ -2884,7 +2884,7 @@ def test_read_thorlabs_raw_ignores_hidden_dot_xml_files(tmp_path, monkeypatch):
             return [hidden_resource_xml.name, hidden_dot_xml.name, valid_xml.name]
         return real_listdir(path)
 
-    monkeypatch.setattr("omio.omio.os.listdir", fake_listdir)
+    monkeypatch.setattr("omio.readers.thorlabs_raw.os.listdir", fake_listdir)
 
     image, md = read_thorlabs_raw(str(raw_path), zarr_store=None, verbose=False)
 
@@ -5096,7 +5096,7 @@ def test_bids_batch_convert_subject_detection_startswith_and_ignores_files(tmp_p
     # patch imconvert so we do not depend on real images
     def fake_imconvert(**kwargs):
         return []  # nothing written
-    monkeypatch.setattr("omio.omio.imconvert", fake_imconvert)
+    monkeypatch.setattr("omio.batch.imconvert", fake_imconvert)
 
     out = bids_batch_convert(
         fname=str(project),
@@ -5111,7 +5111,7 @@ def test_bids_batch_convert_subject_has_no_exp_folders_returns_empty(tmp_path, m
     project = tmp_path / "project"
     (project / "sub-01").mkdir(parents=True)
 
-    monkeypatch.setattr("omio.omio.imconvert", lambda **kwargs: ["should_not_happen"])
+    monkeypatch.setattr("omio.batch.imconvert", lambda **kwargs: ["should_not_happen"])
 
     out = bids_batch_convert(
         fname=str(project),
@@ -5129,7 +5129,7 @@ def test_bids_batch_convert_mode_a_imconvert_exception_is_caught(tmp_path, monke
 
     def failing_imconvert(**kwargs):
         raise RuntimeError("boom")
-    monkeypatch.setattr("omio.omio.imconvert", failing_imconvert)
+    monkeypatch.setattr("omio.batch.imconvert", failing_imconvert)
 
     out = bids_batch_convert(
         fname=str(project),
@@ -5145,7 +5145,7 @@ def test_bids_batch_convert_return_fnames_false_returns_none(tmp_path, monkeypat
     project = tmp_path / "project"
     _build_bids_like_tree(project, sub_names=("sub-01",), exp_names=("TP000",), files_per_exp=1)
 
-    monkeypatch.setattr("omio.omio.imconvert", lambda **kwargs: [str(tmp_path / "dummy.ome.tif")])
+    monkeypatch.setattr("omio.batch.imconvert", lambda **kwargs: [str(tmp_path / "dummy.ome.tif")])
 
     out = bids_batch_convert(
         fname=str(project),
@@ -5163,7 +5163,7 @@ def test_bids_batch_convert_mode_b_tagfolder_set_but_none_found_skips(tmp_path, 
     _build_bids_like_tree(project, sub_names=("sub-01",), exp_names=("TP000",), files_per_exp=1, tagfolder_prefix=None)
 
     # should never be called
-    monkeypatch.setattr("omio.omio.imconvert", lambda **kwargs: ["x"])
+    monkeypatch.setattr("omio.batch.imconvert", lambda **kwargs: ["x"])
 
     out = bids_batch_convert(
         fname=str(project),
@@ -5180,13 +5180,13 @@ def test_bids_batch_convert_mode_b_merge_tagfolders_imread_none_skips(tmp_path, 
     _build_bids_like_tree(project, sub_names=("sub-01",), exp_names=("TP000",), files_per_exp=1,
                          tagfolder_prefix="TAG_", tagfolders_per_exp=2)
 
-    monkeypatch.setattr("omio.omio.imread", lambda **kwargs: (None, None))
+    monkeypatch.setattr("omio.batch.imread", lambda **kwargs: (None, None))
     # imwrite must not be called
     called = {"write": 0}
     def fake_write_ometiff(**kwargs):
         called["write"] += 1
         return ["x"]
-    monkeypatch.setattr("omio.omio.imwrite", fake_write_ometiff)
+    monkeypatch.setattr("omio.batch.imwrite", fake_write_ometiff)
 
     out = bids_batch_convert(
         fname=str(project),
@@ -5208,7 +5208,7 @@ def test_bids_batch_convert_mode_b_merge_tagfolders_injects_provenance_and_uses_
     dummy_img = np.zeros((1, 1, 1, 2, 2), dtype=np.uint8)
     dummy_md = {}  # no Annotations
 
-    monkeypatch.setattr("omio.omio.imread", lambda **kwargs: (dummy_img, dummy_md))
+    monkeypatch.setattr("omio.batch.imread", lambda **kwargs: (dummy_img, dummy_md))
 
     captured = {}
     def fake_write_ometiff(fname, images, metadatas, relative_path, **kwargs):
@@ -5216,7 +5216,7 @@ def test_bids_batch_convert_mode_b_merge_tagfolders_injects_provenance_and_uses_
         captured["md"] = metadatas
         captured["relative_path"] = relative_path
         return [str(Path(fname) / (relative_path or "") / "out.ome.tif")]
-    monkeypatch.setattr("omio.omio.imwrite", fake_write_ometiff)
+    monkeypatch.setattr("omio.batch.imwrite", fake_write_ometiff)
 
     out = bids_batch_convert(
         fname=str(project),
@@ -5243,13 +5243,13 @@ def test_bids_batch_convert_mode_b_merge_tagfolders_overwrites_non_dict_annotati
     dummy_img = np.zeros((1, 1, 1, 2, 2), dtype=np.uint8)
     dummy_md = {"Annotations": "not_a_dict"}
 
-    monkeypatch.setattr("omio.omio.imread", lambda **kwargs: (dummy_img, dummy_md))
+    monkeypatch.setattr("omio.batch.imread", lambda **kwargs: (dummy_img, dummy_md))
 
     captured = {}
     def fake_write_ometiff(**kwargs):
         captured["md"] = kwargs["metadatas"]
         return [str(Path(kwargs["fname"]) / "merged" / "out.ome.tif")]
-    monkeypatch.setattr("omio.omio.imwrite", fake_write_ometiff)
+    monkeypatch.setattr("omio.batch.imwrite", fake_write_ometiff)
 
     out = bids_batch_convert(
         fname=str(project),
@@ -5274,13 +5274,13 @@ def test_bids_batch_convert_merge_tagfolders_cleanup_called_only_when_zarr_store
     dummy_img = np.zeros((1, 1, 1, 2, 2), dtype=np.uint8)
     dummy_md = {}
 
-    monkeypatch.setattr("omio.omio.imread", lambda **kwargs: (dummy_img, dummy_md))
-    monkeypatch.setattr("omio.omio.imwrite", lambda **kwargs: [str(tmp_path / "out.ome.tif")])
+    monkeypatch.setattr("omio.batch.imread", lambda **kwargs: (dummy_img, dummy_md))
+    monkeypatch.setattr("omio.batch.imwrite", lambda **kwargs: [str(tmp_path / "out.ome.tif")])
 
     calls = {"n": 0}
     def fake_cleanup(path, full_cleanup=False, verbose=False):
         calls["n"] += 1
-    monkeypatch.setattr("omio.omio.cleanup_omio_cache", fake_cleanup)
+    monkeypatch.setattr("omio.batch.cleanup_omio_cache", fake_cleanup)
 
     # zarr_store None -> no cleanup
     bids_batch_convert(
@@ -5324,12 +5324,12 @@ def test_bids_batch_convert_mode_b_merge_tagfolders_write_exception_is_caught(tm
     dummy_img = np.zeros((1, 1, 1, 2, 2), dtype=np.uint8)
     dummy_md = {}
 
-    monkeypatch.setattr("omio.omio.imread", lambda **kwargs: (dummy_img, dummy_md))
+    monkeypatch.setattr("omio.batch.imread", lambda **kwargs: (dummy_img, dummy_md))
 
     def failing_write(**kwargs):
         raise RuntimeError("write failed")
 
-    monkeypatch.setattr("omio.omio.imwrite", failing_write)
+    monkeypatch.setattr("omio.batch.imwrite", failing_write)
 
     out = bids_batch_convert(
         fname=str(project),
@@ -5358,11 +5358,11 @@ def test_dispatch_read_file_tiff_variants_go_to_read_tif(monkeypatch):
     calls = {}
 
     fake = _make_fake_reader("read_tif", calls)
-    monkeypatch.setattr("omio.omio.read_tif", fake)
+    monkeypatch.setattr("omio.read.read_tif", fake)
 
     # ensure other readers would fail if called
-    monkeypatch.setattr("omio.omio.read_czi", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_czi called")))
-    monkeypatch.setattr("omio.omio.read_thorlabs_raw", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_thorlabs_raw called")))
+    monkeypatch.setattr("omio.read.read_czi", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_czi called")))
+    monkeypatch.setattr("omio.read.read_thorlabs_raw", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_thorlabs_raw called")))
 
     path = "some/path/file.TIFF"  # upper-case should still dispatch to tif reader
     out = _dispatch_read_file(
@@ -5387,7 +5387,7 @@ def test_dispatch_read_file_tiff_variants_go_to_read_tif(monkeypatch):
 
 def test_dispatch_read_file_lsm_goes_to_read_tif(monkeypatch):
     calls = {}
-    monkeypatch.setattr("omio.omio.read_tif", _make_fake_reader("read_tif", calls))
+    monkeypatch.setattr("omio.read.read_tif", _make_fake_reader("read_tif", calls))
 
     out = _dispatch_read_file(
         path="x/stack.lsm",
@@ -5404,12 +5404,12 @@ def test_dispatch_read_file_lsm_goes_to_read_tif(monkeypatch):
 
 def test_dispatch_read_file_ome_tif_detected_by_looks_like_ome_tif(monkeypatch):
     calls = {}
-    monkeypatch.setattr("omio.omio.read_tif", _make_fake_reader("read_tif", calls))
+    monkeypatch.setattr("omio.read.read_tif", _make_fake_reader("read_tif", calls))
 
     # Force the ome detector branch to be used regardless of extension parsing details
-    monkeypatch.setattr("omio.omio._looks_like_ome_tif", lambda lp: True)
+    monkeypatch.setattr("omio.read._looks_like_ome_tif", lambda lp: True)
     # also ensure _lower_ext would not accidentally route elsewhere
-    monkeypatch.setattr("omio.omio._lower_ext", lambda lp: ".nope")
+    monkeypatch.setattr("omio.read._lower_ext", lambda lp: ".nope")
 
     out = _dispatch_read_file(
         path="x/whatever.OME.TIF",
@@ -5426,9 +5426,9 @@ def test_dispatch_read_file_ome_tif_detected_by_looks_like_ome_tif(monkeypatch):
 
 def test_dispatch_read_file_czi_goes_to_read_czi(monkeypatch):
     calls = {}
-    monkeypatch.setattr("omio.omio.read_czi", _make_fake_reader("read_czi", calls))
-    monkeypatch.setattr("omio.omio.read_tif", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_tif called")))
-    monkeypatch.setattr("omio.omio.read_thorlabs_raw", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_thorlabs_raw called")))
+    monkeypatch.setattr("omio.read.read_czi", _make_fake_reader("read_czi", calls))
+    monkeypatch.setattr("omio.read.read_tif", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_tif called")))
+    monkeypatch.setattr("omio.read.read_thorlabs_raw", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_thorlabs_raw called")))
 
     path = "x/stack.CZI"
     out = _dispatch_read_file(
@@ -5451,9 +5451,9 @@ def test_dispatch_read_file_czi_goes_to_read_czi(monkeypatch):
 
 def test_dispatch_read_file_raw_goes_to_read_thorlabs_raw(monkeypatch):
     calls = {}
-    monkeypatch.setattr("omio.omio.read_thorlabs_raw", _make_fake_reader("read_thorlabs_raw", calls))
-    monkeypatch.setattr("omio.omio.read_tif", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_tif called")))
-    monkeypatch.setattr("omio.omio.read_czi", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_czi called")))
+    monkeypatch.setattr("omio.read.read_thorlabs_raw", _make_fake_reader("read_thorlabs_raw", calls))
+    monkeypatch.setattr("omio.read.read_tif", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_tif called")))
+    monkeypatch.setattr("omio.read.read_czi", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read_czi called")))
 
     out = _dispatch_read_file(
         path="x/data.raw",
@@ -5471,8 +5471,8 @@ def test_dispatch_read_file_raw_goes_to_read_thorlabs_raw(monkeypatch):
 
 def test_dispatch_read_file_unsupported_extension_raises(monkeypatch):
     # Make sure ome detector is false so we go purely by extension
-    monkeypatch.setattr("omio.omio._looks_like_ome_tif", lambda lp: False)
-    monkeypatch.setattr("omio.omio._lower_ext", lambda lp: ".xyz")
+    monkeypatch.setattr("omio.read._looks_like_ome_tif", lambda lp: False)
+    monkeypatch.setattr("omio.read._lower_ext", lambda lp: ".xyz")
 
     with pytest.raises(ValueError, match="Unsupported file extension"):
         _dispatch_read_file(
@@ -5534,6 +5534,16 @@ class FakeViewer:
             }
         )
         return layer
+
+class FakeNapariModule:
+    def __init__(self, viewer):
+        self._viewer = viewer
+
+    def current_viewer(self):
+        return self._viewer
+
+    def Viewer(self):
+        return FakeViewer()
 
 def _make_metadata(unit: str = "micron"):
     return {
@@ -5667,13 +5677,12 @@ def test_squeeze_zarr_to_napari_cache_dask_writes_into_cache_dir(tmp_path: Path)
 # Tests for Napari wrapper logic without creating a real GUI:
 
 def test_single_image_open_in_napari_numpy_input_uses_expected_channel_axis_and_scale(monkeypatch, tmp_path: Path):
-    import omio.omio as m
+    import omio.viewer as m
 
     fake_viewer = FakeViewer()
 
     # Force reuse of a viewer without starting Qt
-    monkeypatch.setattr(m.napari, "current_viewer", lambda: fake_viewer)
-    monkeypatch.setattr(m.napari, "Viewer", lambda: FakeViewer())
+    monkeypatch.setattr(m, "napari", FakeNapariModule(fake_viewer))
 
     md = _make_metadata(unit="micron")
 
@@ -5705,11 +5714,10 @@ def test_single_image_open_in_napari_numpy_input_uses_expected_channel_axis_and_
     assert fake_viewer.scale_bar.unit == "micron"
 
 def test_single_image_open_in_napari_zarr_nodask_creates_side_store_and_passes_dask(monkeypatch, tmp_path: Path):
-    import omio.omio as m
+    import omio.viewer as m
 
     fake_viewer = FakeViewer()
-    monkeypatch.setattr(m.napari, "current_viewer", lambda: fake_viewer)
-    monkeypatch.setattr(m.napari, "Viewer", lambda: FakeViewer())
+    monkeypatch.setattr(m, "napari", FakeNapariModule(fake_viewer))
 
     md = _make_metadata(unit="micron")
 
@@ -5740,11 +5748,10 @@ def test_single_image_open_in_napari_zarr_nodask_creates_side_store_and_passes_d
     assert call["blending"] == "additive"
 
 def test_open_in_napari_multiple_images_reuses_viewer_and_appends_idx_suffix(monkeypatch, tmp_path: Path):
-    import omio.omio as m
+    import omio.viewer as m
 
     fake_viewer = FakeViewer()
-    monkeypatch.setattr(m.napari, "current_viewer", lambda: fake_viewer)
-    monkeypatch.setattr(m.napari, "Viewer", lambda: FakeViewer())
+    monkeypatch.setattr(m, "napari", FakeNapariModule(fake_viewer))
 
     md = _make_metadata(unit="micron")
 
@@ -5770,11 +5777,10 @@ def test_open_in_napari_multiple_images_reuses_viewer_and_appends_idx_suffix(mon
     assert fake_viewer.added[1]["name"] == "base_name_idx1"
 
 def test_open_in_napari_uses_metadata_filename_when_image_name_is_none(monkeypatch):
-    import omio.omio as m
+    import omio.viewer as m
 
     fake_viewer = FakeViewer()
-    monkeypatch.setattr(m.napari, "current_viewer", lambda: fake_viewer)
-    monkeypatch.setattr(m.napari, "Viewer", lambda: FakeViewer())
+    monkeypatch.setattr(m, "napari", FakeNapariModule(fake_viewer))
 
     md = _make_metadata(unit="micron")
     md["Annotations"]["original_filename"] = "13374.tif"
@@ -5794,11 +5800,10 @@ def test_open_in_napari_uses_metadata_filename_when_image_name_is_none(monkeypat
     assert fake_viewer.added[0]["name"] == "13374"
 
 def test_open_in_napari_layer_names_and_blending_are_forwarded(monkeypatch):
-    import omio.omio as m
+    import omio.viewer as m
 
     fake_viewer = FakeViewer()
-    monkeypatch.setattr(m.napari, "current_viewer", lambda: fake_viewer)
-    monkeypatch.setattr(m.napari, "Viewer", lambda: FakeViewer())
+    monkeypatch.setattr(m, "napari", FakeNapariModule(fake_viewer))
 
     md = _make_metadata(unit="micron")
     img = _make_deterministic_5d(shape_tzcyx=(1, 1, 2, 4, 4))
@@ -5818,11 +5823,10 @@ def test_open_in_napari_layer_names_and_blending_are_forwarded(monkeypatch):
     assert fake_viewer.added[0]["blending"] == "translucent"
 
 def test_open_in_napari_prefixes_layer_names_with_explicit_image_name(monkeypatch):
-    import omio.omio as m
+    import omio.viewer as m
 
     fake_viewer = FakeViewer()
-    monkeypatch.setattr(m.napari, "current_viewer", lambda: fake_viewer)
-    monkeypatch.setattr(m.napari, "Viewer", lambda: FakeViewer())
+    monkeypatch.setattr(m, "napari", FakeNapariModule(fake_viewer))
 
     md = _make_metadata(unit="micron")
     img = _make_deterministic_5d(shape_tzcyx=(1, 1, 3, 4, 4))
