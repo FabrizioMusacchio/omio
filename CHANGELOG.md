@@ -11,11 +11,17 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ### 🔜 OMIO v0.2.10 - UNRELEASED
 
-This upcoming maintenance release improves documentation around OMIO's project scope.
+This is a major refactor of OMIO's internal structure: OMIO is now fully organized into focused internal modules for core helpers, cache handling, readers, writers, viewer integration, conversion, templates, and batch processing. The public API remains unchanged and backward-compatible. However, future extensions and new readers will be easier to implement and maintain thanks to the new modular structure.
 
 #### 📃 Changes
+##### 🧩 Changed
+* Modularized OMIO's implementation into focused internal modules for core helpers, cache handling, readers, writers, viewer integration, conversion, templates, and batch processing while keeping `omio.omio` as a compatibility facade for existing imports.
+
 ##### 📚 Documentation
 * Clarified OMIO's scope relative to Bio-Formats, explaining why Bio-Formats is not a default dependency and how OMIO can still be extended through dedicated pure-Python readers.
+
+##### 🧪 Testing and robustness
+* Updated internal monkeypatch targets in the test suite to match the new module boundaries and kept the full regression suite passing after the refactor.
 
 ---
 
