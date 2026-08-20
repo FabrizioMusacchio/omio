@@ -9,7 +9,7 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
-### 🔜 OMIO v0.3.0 - UNRELEASED
+### 🚀 OMIO v0.3.0
 
 This is a major refactor of OMIO's internal structure and batch-processing API. OMIO is now fully organized into focused internal modules for core helpers, cache handling, readers, writers, viewer integration, conversion, templates, and batch processing. This enables more maintainable code, better test coverage, and a more flexible public API for, e.g., adding new readers or custom batch-processing workflows.
 
