@@ -155,7 +155,7 @@ OMIO exposes a small set of core functions that cover most workflows:
 * ``imread()`` for reading images from files or folders
 * ``imconvert()`` for converting images to OME TIFF
 * ``imwrite()`` for writing images to OME TIFF
-* ``bids_batch_convert()`` for batch conversion of BIDS like projects
+* ``bids_batch_process()`` for batch processing of BIDS like projects
 * ``open_in_napari()`` for interactive visualization
 * utility functions for metadata and image template handling
 

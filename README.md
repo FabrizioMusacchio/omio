@@ -188,7 +188,7 @@ OMIO's core functions are:
 * `imread()`: read images from files or folders,
 * `imwrite()`: write images to OME-TIFF,
 * `imconvert()`: convert images to OME-TIFF,
-* `bids_batch_convert()`: batch-convert BIDS-like projects,
+* `bids_batch_process()`: batch-process BIDS-like projects,
 * `open_in_napari()`: visualize images in napari,
 * `create_empty_metadata()`: create empty metadata templates,
 * `create_empty_image()`: create empty image arrays, and
@@ -221,16 +221,40 @@ merged_img, merged_md = omio.imread(
 omio.imconvert("experiment_folder")
 ```
 
-### Batch conversion over a BIDS-like project
+### Batch processing over a BIDS-like project
+
+`bids_batch_process()` supports
+explicit subject IDs or subject-prefix discovery, arbitrary folder-token levels,
+file-pattern filtering, name-based exclusion, skip-if-already-converted behavior, and
+persistent run/error reports in the project root.
+Use `output_folder_name` for relative or absolute output locations; `save_options`
+is reserved for writer settings such as `overwrite` or `compression_level`.
+OME-TIFF multi-file series are collapsed during discovery by default, and optional
+`folder_stacks` tags can be used to merge tagged stack folders before processing.
 
 ```python
-omio.bids_batch_convert(
-    fname="project_root",
-    sub="sub-",
-    exp="TP",
-    tagfolder="TAG_",
-    merge_tagfolders=True)
+result = omio.bids_batch_process(
+    project_root="project_root",
+    subject_ids=None,
+    subject_prefix="ID",
+    tag_folder_levels=[
+        ("DC000_FOV", "DA000_FOV"),
+        ("TL_000",)],
+    image_patterns=None,
+    exclude_name_contains=("Preview",),
+    folder_stacks=None,
+    output_folder_name="omio_converted",
+    skip_processed=True,
+    load_options={"zarr_store": "disk", "reuse_disk_cache": True},
+    save_options={"overwrite": False})
+
+print(len(result.processed), len(result.skipped), len(result.failed))
+print(result.report_path)
 ```
+
+If Thorlabs RAW files fail because XML metadata are missing or unusable, OMIO can use
+the generated batch error report to create editable YAML sidecars via
+`batch_create_thorlabs_raw_yaml_templates()`.
 
 
 ## Scope and non-goals

@@ -9,19 +9,41 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 ---
 
-### 🔜 OMIO v0.2.10 - UNRELEASED
+### 🔜 OMIO v0.3.0 - UNRELEASED
 
-This is a major refactor of OMIO's internal structure: OMIO is now fully organized into focused internal modules for core helpers, cache handling, readers, writers, viewer integration, conversion, templates, and batch processing. The public API remains unchanged and backward-compatible. However, future extensions and new readers will be easier to implement and maintain thanks to the new modular structure.
+This is a major refactor of OMIO's internal structure and batch-processing API. OMIO is now fully organized into focused internal modules for core helpers, cache handling, readers, writers, viewer integration, conversion, templates, and batch processing. This enables more maintainable code, better test coverage, and a more flexible public API for, e.g., adding new readers or custom batch-processing workflows.
+
+This release also adds the new flexible BIDS-like batch processor under the public `bids_batch_process()` name, while the pre-v0.3.0 converter remains available as `bids_batch_convert()` for backward compatibility. 
+
+**We recommend that users relying on OMIO's batch workflows upgrade to v0.3.0 and switch to the new `bids_batch_process()` API, which provides more robust discovery, filtering, error handling, and reporting features.**
 
 #### 📃 Changes
+##### ✨ Added
+* Added a new public `bids_batch_process()` implementation with explicit subject selection, subject-prefix discovery, arbitrary folder-token levels, image-pattern filtering, name-based exclusion, skip-if-already-converted logic, robust per-file error handling, persistent run reports, and structured root/local error reports.
+* Added `discover_bids_like_batch_images` for reusable discovery of image files in flexible BIDS-like folder trees.
+* Added `batch_create_thorlabs_raw_yaml_templates`, which reads OMIO or ZenReg-style batch error reports and creates Thorlabs RAW YAML sidecars from editable `template_metadata` blocks.
+
 ##### 🧩 Changed
 * Modularized OMIO's implementation into focused internal modules for core helpers, cache handling, readers, writers, viewer integration, conversion, templates, and batch processing while keeping `omio.omio` as a compatibility facade for existing imports.
+* Kept the pre-v0.3.0 BIDS-like converter available as `bids_batch_convert()` for backward compatibility, but marked it as deprecated in favor of `bids_batch_process()`.
+* Batch run reports now automatically label successful custom `process_func` runs with the callable name and compact `processing_options` when no explicit `method_name` is provided.
+* `bids_batch_process(output_folder_name=...)` now explicitly supports both relative output folders below each discovered image folder and absolute output folders.
+* `bids_batch_process()` and `discover_bids_like_batch_images()` now collapse OME multi-file TIFF series during discovery by default, matching OMIO's existing `imread`/`imconvert` behavior. Users can opt out with `collapse_ome_multifile_series=False`.
+* `bids_batch_process()` and `discover_bids_like_batch_images()` now support optional `folder_stacks` tags for discovering tagged stack folders below the final folder-token level and loading them through OMIO's existing folder-stack merge path.
 
 ##### 📚 Documentation
 * Clarified OMIO's scope relative to Bio-Formats, explaining why Bio-Formats is not a default dependency and how OMIO can still be extended through dedicated pure-Python readers.
+* Documented the new `bids_batch_process()` workflow, report files, skip semantics, file-pattern filtering, nested tag-folder discovery, and RAW YAML template workflow in the RTD batch conversion guide, README, and interactive tutorial script.
+* Reintroduced a clearly marked legacy `bids_batch_convert()` tutorial cell in the interactive usage script for users maintaining older workflows.
+* Added a custom `process_func` batch example showing Z-projection with OMIO's canonical `TZCYX` axis convention while keeping default OMIO loading and saving.
+* Documented OME multi-file TIFF batch handling and tagged folder-stack batch processing in the RTD batch-processing guide and interactive tutorial script.
 
 ##### 🧪 Testing and robustness
 * Updated internal monkeypatch targets in the test suite to match the new module boundaries and kept the full regression suite passing after the refactor.
+* Added regression coverage for flexible `bids_batch_process()` discovery, skip-if-already-converted handling, load/process/save failures, persistent run-report updates, error-report creation, and batch RAW YAML sidecar generation.
+* Added regression coverage for automatic custom `process_func` naming and option reporting in batch run reports.
+* Added regression coverage for OME multi-file TIFF series collapsing in flexible batch discovery.
+* Added regression coverage for tagged folder-stack discovery and automatic forwarding of OMIO folder-stack merge options in `bids_batch_process()`.
 
 ---
 

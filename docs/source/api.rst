@@ -14,7 +14,9 @@ microscopy image data:
 .. autofunction:: imread
 .. autofunction:: imwrite
 .. autofunction:: imconvert
-.. autofunction:: bids_batch_convert
+.. autofunction:: bids_batch_process
+.. autofunction:: discover_bids_like_batch_images
+.. autofunction:: batch_create_thorlabs_raw_yaml_templates
 
 Checks and utilities
 ---------------------------

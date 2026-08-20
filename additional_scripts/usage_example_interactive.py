@@ -566,7 +566,6 @@ integration, which supports a) handling of in-memory and on-disk memory-mapped Z
 b) automatic axis reordering based on OME semantics, and c) DASK support for out-of-core
 parallel processing.
 """
-
 # %% REUSE AN EXISTING ON-DISK OMIO CACHE
 """
 If you repeatedly open the same large file with `zarr_store="disk"`, OMIO can reuse an
@@ -794,14 +793,15 @@ output_fnames_folder_stacks = om.imconvert(fname_folder_stacks,
 for ofname in output_fnames_folder_stacks:
     print(f"Converted file name from folder stacks: {ofname}")
 
-# %% OMIO'S BATCH CONVERSION FUNCTION
+# %% OMIO'S FLEXIBLE BIDS-LIKE BATCH PROCESSING FUNCTION
 """ 
-OMIO provides a convenience function called `bids_batch_convert` to convert entire
-folders of image files into OME-TIFF format in a single function call. It is required
-that the folder structures follow the BIDS-like naming conventions, where sub-folders
-are named according to specific tags such as `sub-<subject_id>`, `ses-<session_id>`,
-`acq-<acquisition_id>`, `run-<run_id>`, etc. Here is a general example of a BIDS-like
-folder structure:
+OMIO provides a flexible function called `bids_batch_process` to process entire
+BIDS-like folder trees. By default, it reads each discovered image with `om.imread`
+and writes an OME-TIFF output with `om.imwrite`. The function discovers images
+below a project root, processes each file independently, skips already processed
+files if requested, and writes persistent run/error reports into the project root.
+
+The expected project structure can be simple or nested:
 
         project_root (= fname)
         ├─ <sub*>
@@ -822,23 +822,194 @@ folder structure:
         │  └─ ...
         └─ <sub*>
         └─ ...
-        
 
-    Where:
-    
-    * ``<sub*>`` are subject folders detected by prefix matching with ``sub``.
-      For example, if ``sub="sub"``, then ``"sub-01"``, ``"sub01"``, ``"sub_01"``, and
-      ``"sub-A"`` all match, because this function uses ``startswith(sub)`` only.
-    * ``<exp*>`` are experiment folders detected within each subject folder via ``exp`` and
-      ``exp_match_mode`` (``"startswith"``, ``"exact"``, or ``"regex"``).
-    * ``<tagfolder*>`` are optional tagfolders detected within an experiment folder via
-      prefix matching with ``tagfolder`` (for example ``"TAG_"``).
-      If ``tagfolder`` is set, direct image files in ``<exp*>`` are ignored and only
-      tagfolders are processed.
+Important knobs:
 
-To perform a batch conversion of all image files in a BIDS-like folder structure,
-provide the root folder path as `fname` argument, the subject folder tag as `sub` argument,
-and the experiment folder tag as `exp` argument to `bids_batch_convert` as minimum:
+* `subject_ids=None` + `subject_prefix="ID"` processes all subject folders whose
+  names start with "ID".
+* `subject_ids=["ID0001"]` restricts processing to explicit subject folders.
+* `tag_folder_levels` describes arbitrary folder-token levels below each subject.
+* `image_patterns=None` uses OMIO's defaults for TIFF/OME-TIFF/LSM/CZI/RAW.
+* `exclude_name_contains=("Preview",)` skips preview files and folders.
+* `collapse_ome_multifile_series=True` keeps only one representative file per
+  OME multi-file TIFF series during discovery; OMIO then reads the full series.
+* `folder_stacks=("time",)` can additionally discover tagged stack folders such
+  as `time01`, `time02`, ... below each final folder level and merge them before
+  processing. Keep it as `None` for regular file discovery only.
+* `skip_processed=True` avoids overwriting existing converted outputs and records
+  them as already converted in the run report.
+"""
+
+project_root = "../example_data/tif_dummy_data/BIDS_project_example/"
+
+# single-file exploration before launching a batch:
+single_file = "../example_data/tif_dummy_data/BIDS_project_example/ID0001/TP002_single_tif/TZCYX_T1_Z5_C2_TP002.ome.tif"
+image_single, metadata_single = om.imread(single_file)
+print(image_single.shape, metadata_single.get("axes", "N/A"))
+
+# batch discovery settings:
+subject_ids    = None
+subject_prefix = "ID"
+
+# Simple project layout: project_root / ID0001 / TP... / image files
+tag_folder_levels = [("TP",)]
+
+# More nested project layout example:
+# tag_folder_levels = [
+#     ("DC000_FOV", "DA000_FOV"),
+#     ("TL_000",)]
+
+# Use OMIO defaults by keeping this as None:
+image_patterns = None
+
+# Or restrict processing explicitly:
+# image_patterns = ("*.ome.tif", "*.czi", "*.raw")
+
+# Optional folder-stack tags below the final folder-token level:
+folder_stacks = None
+# folder_stacks = ("FOV1",)  # e.g. FOV1_time001, FOV1_time002, ...
+# folder_stacks = ("time",)  # e.g. time01, time02, ...
+
+# Control where OMIO writes default outputs with output_folder_name.
+# Relative paths are created below each discovered image folder.
+# Absolute paths are used directly, e.g. output_folder_name="/Users/me/omio_outputs".
+# save_options is reserved for imwrite options such as overwrite or compression_level.
+result = om.bids_batch_process(
+    project_root            = project_root,
+    subject_ids             = subject_ids,
+    subject_prefix          = subject_prefix,
+    tag_folder_levels       = tag_folder_levels,
+    image_patterns          = image_patterns,
+    exclude_name_contains   = ("Preview",),
+    folder_stacks           = folder_stacks,
+    merge_along_axis        = "T",
+    zeropadding             = True,
+    collapse_ome_multifile_series = True,
+    output_folder_name      = "omio_converted",
+    skip_processed          = True,
+    load_options            = {"zarr_store": "disk",
+                               "reuse_disk_cache": True},
+    processing_options      = {},
+    save_options            = {"overwrite": False},
+    verbose                 = True)
+
+print(f"Discovered: {len(result.discovered)}")
+print(f"Processed:  {len(result.processed)}")
+print(f"Skipped:    {len(result.skipped)}")
+print(f"Failed:     {len(result.failed)}")
+print(f"Run report: {result.report_path}")
+print(f"Error report: {result.error_report_path}")
+# %% CUSTOM BATCH PROCESSING FUNCTION FOR BIDS-LIKE FOLDER TREES
+"""
+You can also keep OMIO's default loading and saving behavior, but insert your own
+processing function. The callable receives a canonical OMIO image in `TZCYX` order,
+the matching metadata dictionary, the discovered batch record, and the supplied
+`processing_options`.
+
+The following example performs a Z projection only if the image actually contains
+more than one Z slice. This directly uses OMIO's axis convention: instead of assuming
+that Z is always dimension 1, the function looks up the Z axis from `metadata["axes"]`.
+"""
+
+def z_projection_process(*, image, metadata, record, processing_options):
+    projection = processing_options.get("projection", "max")
+    axes = metadata.get("axes", "TZCYX")
+    if "Z" not in axes:
+        return image, metadata, {"details": "no Z axis found; image unchanged"}
+
+    z_axis = axes.index("Z")
+    z_slices = image.shape[z_axis]
+    if z_slices <= 1:
+        return image, metadata, {"details": f"Z={z_slices}; image unchanged"}
+
+    if projection == "max":
+        image_projected = np.max(image, axis=z_axis, keepdims=True)
+    elif projection == "mean":
+        image_projected = np.mean(image, axis=z_axis, keepdims=True)
+    elif projection == "median":
+        image_projected = np.median(image, axis=z_axis, keepdims=True)
+    elif projection == "std":
+        image_projected = np.std(image, axis=z_axis, keepdims=True)
+    elif projection == "var":
+        image_projected = np.var(image, axis=z_axis, keepdims=True)
+    else:
+        raise ValueError(
+            "projection must be one of {'max', 'mean', 'median', 'std', 'var'}")
+
+    metadata_projected = om.update_metadata_from_image(
+        metadata,
+        image_projected,
+        verbose=False)
+    return image_projected, metadata_projected, {
+        "details": f"{projection} projection along Z; {z_slices} slices -> 1 slice"}
+
+result_z_projection = om.bids_batch_process(
+    project_root=project_root,
+    subject_ids=["ID0001"],
+    tag_folder_levels=[("TP002",)],
+    image_patterns=("*.ome.tif",),
+    output_folder_name="omio_z_projection",
+    output_suffix="_z_projected",
+    skip_processed=True,
+    process_func=z_projection_process,
+    processing_options={
+        "projection": "max"},
+    save_options={
+        "overwrite": False},
+    verbose=True)
+
+print(f"Z projection processed: {len(result_z_projection.processed)}")
+print(f"Z projection skipped:   {len(result_z_projection.skipped)}")
+print(f"Z projection failed:    {len(result_z_projection.failed)}")
+print(f"Run report: {result_z_projection.report_path}")
+
+# %% OMIO'S OLD BATCH CONVERSION FUNCTION (DEPRECATED)
+"""
+OMIO's original `bids_batch_convert` function is still available for backward
+compatibility, but it is deprecated since OMIO v0.3.0. New workflows should prefer
+`bids_batch_process`, which is more flexible and writes persistent run/error reports.
+
+The old function converts entire folders of image files into OME-TIFF format in a
+single function call. It expects a stricter BIDS-like folder structure, where
+sub-folders are named according to specific tags such as `sub-<subject_id>`,
+`ses-<session_id>`, `acq-<acquisition_id>`, `run-<run_id>`, etc. Here is a general
+example of a BIDS-like folder structure:
+
+        project_root (= fname)
+        ├─ <sub*>
+        │  ├─ <exp*>
+        │  │  ├─ image_01.tif / image_01.ome.tif / image_01.lsm / image_01.czi / image_01.raw
+        │  ├─ <exp*>
+        │  │  ├─ image_01.tif / image_01.ome.tif / image_01.lsm / image_01.czi / image_01.raw
+        │  │  ├─ image_02.tif / image_02.ome.tif / image_02.lsm / image_02.czi / image_02.raw
+        │  │  └─ ...
+        │  ├─ <exp*>
+        │  │  ├─ <tagfolder*>01
+        │  │  │  ├─ image_01.tif / image_01.czi / image_01.raw / ...
+        │  │  │  └─ ...
+        │  │  ├─ <tagfolder*>02
+        │  │  │  ├─ image_02.tif / image_02.czi / image_02.raw / ...
+        │  │  │  └─ ...
+        │  │  └─ ...
+        │  └─ ...
+        └─ <sub*>
+        └─ ...
+
+Where:
+
+* `<sub*>` are subject folders detected by prefix matching with `sub`.
+  For example, if `sub="sub"`, then `"sub-01"`, `"sub01"`, `"sub_01"`, and
+  `"sub-A"` all match, because this function uses `startswith(sub)` only.
+* `<exp*>` are experiment folders detected within each subject folder via `exp`
+  and `exp_match_mode` (`"startswith"`, `"exact"`, or `"regex"`).
+* `<tagfolder*>` are optional tagfolders detected within an experiment folder via
+  prefix matching with `tagfolder` (for example `"TAG_"`).
+  If `tagfolder` is set, direct image files in `<exp*>` are ignored and only
+  tagfolders are processed.
+
+To perform a legacy batch conversion of all image files in a BIDS-like folder
+structure, provide the root folder path as `fname` argument, the subject folder
+tag as `sub` argument, and the experiment folder tag as `exp` argument:
 """
 fname = "../example_data/tif_dummy_data/BIDS_project_example/"
 id_tag = "ID"
@@ -846,30 +1017,30 @@ exp_tag = "TP001" # contains tif files
 om.bids_batch_convert(fname, sub=id_tag, exp=exp_tag, relative_path="omio_bids_converted")
 
 """ 
-Of course, `bids_batch_convert` has the same functionalities as `imconvert`, `imread`, and
-`imwrite`, so that it is able to, e.g., handle Thorlabs RAW files,
+Of course, `bids_batch_convert` has the same functionalities as `imconvert`, `imread`,
+and `imwrite`, so that it is able to, e.g., handle Thorlabs RAW files:
 """
 
 exp_tag = "TP003" # contains thorlabs raw files
 om.bids_batch_convert(fname, sub=id_tag, exp=exp_tag, relative_path="omio_bids_converted")
 
 """ 
-Also tagged folder stacks can be processed, while the arguments to be provided differ slightly
-from those of `imread`/ `imconvert`. Here, you have to provide the `tagfolder` argument
-to indicate the tag prefix of the tagfolders to be processed:
+Tagged folder stacks can also be processed, while the arguments to be provided differ
+slightly from those of `imread`/ `imconvert`. Here, you provide the `tagfolder`
+argument to indicate the tag prefix of the tagfolders to be processed:
 """
 exp_tag = "TP005" # contains tagged folder stacks
 stackfolder_tag = "FOV1"
-om.bids_batch_convert(fname, sub=id_tag, exp=exp_tag, 
-                       tagfolder=stackfolder_tag,
-                       merge_tagfolders=True,
-                       merge_along_axis="T",
-                       relative_path="omio_bids_converted_FOV1")
+om.bids_batch_convert(fname, sub=id_tag, exp=exp_tag,
+                      tagfolder=stackfolder_tag,
+                      merge_tagfolders=True,
+                      merge_along_axis="T",
+                      relative_path="omio_bids_converted_FOV1")
 
 """ 
 Note: Since `bids_batch_convert` processes multiple files and folders in a batch and
-the additionally provide the `tagfolder`, it is not necessary to set the `relative_path`
-one level up as done before with `imconvert`.
+you additionally provide the `tagfolder`, it is not necessary to set the
+`relative_path` one level up as done before with `imconvert`.
 """
 
 """ 
@@ -881,6 +1052,21 @@ fname_converted = "../example_data/tif_dummy_data/BIDS_project_example/ID0001/TP
 image, metadata = om.imread(fname_converted)
 print(f"Multi-file OME-TIFF image shape: {image.shape} with axes {metadata.get('axes', 'N/A')}")
 om.open_in_napari(image, metadata)
+
+"""
+If Thorlabs RAW files fail because XML metadata are missing or unusable, OMIO writes
+an editable `omio_batch_error_report_<timestamp>.txt` in the project root. Edit the
+`template_metadata` blocks in that report and then distribute YAML sidecars with:
+
+result_yaml = om.batch_create_thorlabs_raw_yaml_templates(
+    project_root,
+    report_name="omio_batch_error_report_YYYY-MM-DD_HH-MM-SS.txt",
+    overwrite_existing=False,
+    verbose=True)
+
+print(f"Created YAML templates: {len(result_yaml.created)}")
+print(f"Skipped RAW files:      {len(result_yaml.skipped)}")
+"""
 # %% CREATING EMPTY, OME-COMPLIANT IMAGE ARRAYS AND METADATA
 """
 OMIO provides a utility functions called `create_empty_image`, `create_empty_metadata`, and

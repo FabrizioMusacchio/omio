@@ -49,10 +49,10 @@ by internal helper utilities:
     End-to-end converter that combines imread and imwrite to transform
     arbitrary supported input data into OME-TIFF with minimal boilerplate.
 
-* bids_batch_convert
-    Batch-level converter operating on a BIDS-like directory hierarchy, supporting
-    subject and experiment discovery, optional tagfolder logic, and controlled
-    merging policies.
+* bids_batch_process
+    Batch-level processor operating on a BIDS-like directory hierarchy, supporting
+    flexible discovery, optional custom processing callables, and persistent
+    run/error reports.
 
 * open_in_napari
     Convenience interface for opening OMIO-handled data directly in napari,

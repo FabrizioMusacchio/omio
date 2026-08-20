@@ -23,7 +23,10 @@ from omio.omio import (
     imwrite,
     imread,
     imconvert,
+    bids_batch_process,
     bids_batch_convert,
+    discover_bids_like_batch_images,
+    batch_create_thorlabs_raw_yaml_templates,
     _get_channel_axis_from_axes_and_shape,
     _get_scales_from_axes_and_metadata,
     _squeeze_zarr_to_napari_cache,
@@ -5342,6 +5345,420 @@ def test_bids_batch_convert_mode_b_merge_tagfolders_write_exception_is_caught(tm
     )
 
     assert out == []
+
+#%% FLEXIBLE BIDS-LIKE BATCH PROCESSOR
+def _touch_flexible_batch_image(root: Path, *parts: str) -> Path:
+    path = root.joinpath(*parts)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("dummy", encoding="utf-8")
+    return path
+
+def _flexible_batch_load_ok(path, **kwargs):
+    return np.zeros((1, 1, 1, 2, 2), dtype=np.uint8), {
+        "axes": "TZCYX",
+        "PhysicalSizeX": 1.0,
+        "PhysicalSizeY": 1.0,
+        "PhysicalSizeZ": 1.0,
+        "unit": "micron"}
+
+def _flexible_batch_process_ok(*, image, metadata, record, processing_options):
+    return image, metadata, {"details": processing_options.get("details", "ok")}
+
+def _flexible_batch_save_touch(*, image, metadata, record, output_dir, output_path, save_options):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("converted", encoding="utf-8")
+    return output_path
+
+def test_discover_bids_like_batch_images_subject_ids(tmp_path):
+    project = tmp_path / "project"
+    img1 = _touch_flexible_batch_image(project, "ID001", "TP000", "a.tif")
+    _touch_flexible_batch_image(project, "ID002", "TP000", "b.tif")
+
+    records = discover_bids_like_batch_images(
+        project,
+        subject_ids=["ID001"],
+        tag_folder_levels=[("TP",)])
+
+    assert [record.image_path for record in records] == [img1]
+    assert records[0].subject_id == "ID001"
+
+def test_discover_bids_like_batch_images_subject_prefix(tmp_path):
+    project = tmp_path / "project"
+    _touch_flexible_batch_image(project, "ID001", "TP000", "a.tif")
+    _touch_flexible_batch_image(project, "mouse001", "TP000", "b.tif")
+
+    records = discover_bids_like_batch_images(
+        project,
+        subject_ids=None,
+        subject_prefix="ID",
+        tag_folder_levels=[("TP",)])
+
+    assert len(records) == 1
+    assert records[0].subject_id == "ID001"
+
+def test_discover_bids_like_batch_images_multiple_tag_folder_levels(tmp_path):
+    project = tmp_path / "project"
+    img = _touch_flexible_batch_image(project, "ID001", "DC000_FOV1", "TL_000", "image.raw")
+    _touch_flexible_batch_image(project, "ID001", "DC000_FOV1", "other", "ignored.raw")
+
+    records = discover_bids_like_batch_images(
+        project,
+        tag_folder_levels=[("DC000_FOV", "DA000_FOV"), ("TL_000",)])
+
+    assert len(records) == 1
+    assert records[0].image_path == img
+    assert records[0].tag_folders == ("DC000_FOV1", "TL_000")
+
+def test_discover_bids_like_batch_images_image_patterns(tmp_path):
+    project = tmp_path / "project"
+    img = _touch_flexible_batch_image(project, "ID001", "TP000", "a.czi")
+    _touch_flexible_batch_image(project, "ID001", "TP000", "b.tif")
+
+    records = discover_bids_like_batch_images(
+        project,
+        tag_folder_levels=[("TP",)],
+        image_patterns=("*.czi",))
+
+    assert [record.image_path for record in records] == [img]
+
+def test_discover_bids_like_batch_images_exclude_name_contains(tmp_path):
+    project = tmp_path / "project"
+    img = _touch_flexible_batch_image(project, "ID001", "TP000", "a.tif")
+    _touch_flexible_batch_image(project, "ID001", "TP000", "a_Preview.tif")
+    _touch_flexible_batch_image(project, "ID001", "TP_skip", "b.tif")
+
+    records = discover_bids_like_batch_images(
+        project,
+        tag_folder_levels=[("TP",)],
+        exclude_name_contains=("Preview", "skip"))
+
+    assert [record.image_path for record in records] == [img]
+
+def test_discover_bids_like_batch_images_collapses_ome_multifile_series(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    img1 = _touch_flexible_batch_image(project, "ID001", "TP000", "series_T0.ome.tif")
+    _touch_flexible_batch_image(project, "ID001", "TP000", "series_T1.ome.tif")
+
+    def collapse_first(files, verbose=True):
+        return [files[0]]
+
+    monkeypatch.setattr("omio.batch._collapse_ome_multifile_series", collapse_first)
+
+    records = discover_bids_like_batch_images(
+        project,
+        tag_folder_levels=[("TP",)],
+        image_patterns=("*.ome.tif",))
+
+    assert [record.image_path for record in records] == [img1]
+
+def test_discover_bids_like_batch_images_can_keep_ome_multifile_members(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    img1 = _touch_flexible_batch_image(project, "ID001", "TP000", "series_T0.ome.tif")
+    img2 = _touch_flexible_batch_image(project, "ID001", "TP000", "series_T1.ome.tif")
+    calls = {"collapse": 0}
+
+    def collapse_should_not_run(files, verbose=True):
+        calls["collapse"] += 1
+        return [files[0]]
+
+    monkeypatch.setattr("omio.batch._collapse_ome_multifile_series", collapse_should_not_run)
+
+    records = discover_bids_like_batch_images(
+        project,
+        tag_folder_levels=[("TP",)],
+        image_patterns=("*.ome.tif",),
+        collapse_ome_multifile_series=False)
+
+    assert calls["collapse"] == 0
+    assert [record.image_path for record in records] == [img1, img2]
+
+def test_discover_bids_like_batch_images_folder_stack_tags(tmp_path):
+    project = tmp_path / "project"
+    time01 = project / "ID001" / "TP000" / "time01"
+    time02 = project / "ID001" / "TP000" / "time02"
+    time01.mkdir(parents=True)
+    time02.mkdir(parents=True)
+    _touch_flexible_batch_image(project, "ID001", "TP000", "Preview_time03", "a.tif")
+
+    records = discover_bids_like_batch_images(
+        project,
+        tag_folder_levels=[("TP",)],
+        folder_stacks=("time",))
+
+    assert len(records) == 1
+    assert records[0].input_kind == "folder_stack"
+    assert records[0].folder_stack_tag == "time"
+    assert records[0].image_path == time01
+    assert records[0].folder_stack_paths == (time01, time02)
+
+def test_bids_batch_process_skip_processed(tmp_path):
+    project = tmp_path / "project"
+    img = _touch_flexible_batch_image(project, "ID001", "TP000", "a.tif")
+    expected = img.parent / "omio_converted" / "a_omio_converted.ome.tif"
+    expected.parent.mkdir()
+    expected.write_text("already", encoding="utf-8")
+    calls = {"load": 0}
+
+    def load_should_not_run(path, **kwargs):
+        calls["load"] += 1
+        return _flexible_batch_load_ok(path, **kwargs)
+
+    result = bids_batch_process(
+        project,
+        tag_folder_levels=[("TP",)],
+        load_func=load_should_not_run,
+        save_func=_flexible_batch_save_touch,
+        verbose=False)
+
+    assert calls["load"] == 0
+    assert len(result.skipped) == 1
+    assert result.skipped[0].stage == "already_processed"
+    assert "[CONVERTED]" in result.report_path.read_text(encoding="utf-8")
+
+def test_bids_batch_process_folder_stack_records_use_omio_merge_options(tmp_path):
+    project = tmp_path / "project"
+    (project / "ID001" / "TP000" / "time01").mkdir(parents=True)
+    (project / "ID001" / "TP000" / "time02").mkdir(parents=True)
+    seen = {}
+
+    def load_capture(path, **kwargs):
+        seen["path"] = Path(path)
+        seen["kwargs"] = kwargs
+        return _flexible_batch_load_ok(path, **kwargs)
+
+    result = bids_batch_process(
+        project,
+        tag_folder_levels=[("TP",)],
+        folder_stacks=("time",),
+        merge_along_axis="Z",
+        zeropadding=False,
+        load_func=load_capture,
+        save_func=_flexible_batch_save_touch,
+        verbose=False)
+
+    assert len(result.processed) == 1
+    assert seen["path"] == project / "ID001" / "TP000" / "time01"
+    assert seen["kwargs"]["folder_stacks"] is True
+    assert seen["kwargs"]["merge_folder_stacks"] is True
+    assert seen["kwargs"]["merge_along_axis"] == "Z"
+    assert seen["kwargs"]["zeropadding"] is False
+    assert result.processed[0].output_path.name == "time_omio_converted.ome.tif"
+    assert result.processed[0].output_path.exists()
+
+def test_bids_batch_process_folder_stack_default_loader_merges_tagged_folders_without_underscore(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    file1 = _touch_flexible_batch_image(project, "ID001", "TP000", "time01", "a.tif")
+    file2 = _touch_flexible_batch_image(project, "ID001", "TP000", "time02", "a.tif")
+    seen = {"paths": [], "saved_shape": None}
+
+    def dispatch_fake(path, **kwargs):
+        seen["paths"].append(Path(path))
+        value = len(seen["paths"])
+        image = np.full((1, 1, 1, 2, 2), value, dtype=np.uint8)
+        metadata = {
+            "axes": "TZCYX",
+            "PhysicalSizeX": 1.0,
+            "PhysicalSizeY": 1.0,
+            "PhysicalSizeZ": 1.0,
+            "PhysicalSizeXUnit": "micron",
+            "PhysicalSizeYUnit": "micron",
+            "PhysicalSizeZUnit": "micron"}
+        return image, metadata
+
+    def save_capture(*, image, metadata, record, output_dir, output_path, save_options):
+        seen["saved_shape"] = image.shape
+        return _flexible_batch_save_touch(
+            image=image,
+            metadata=metadata,
+            record=record,
+            output_dir=output_dir,
+            output_path=output_path,
+            save_options=save_options)
+
+    monkeypatch.setattr("omio.batch._dispatch_read_file", dispatch_fake)
+
+    result = bids_batch_process(
+        project,
+        tag_folder_levels=[("TP",)],
+        folder_stacks=("time",),
+        merge_along_axis="T",
+        save_func=save_capture,
+        verbose=False)
+
+    assert len(result.processed) == 1
+    assert seen["paths"] == [file1, file2]
+    assert seen["saved_shape"] == (2, 1, 1, 2, 2)
+
+def test_bids_batch_process_absolute_output_folder_name(tmp_path):
+    project = tmp_path / "project"
+    _touch_flexible_batch_image(project, "ID001", "TP000", "a.tif")
+    output_root = tmp_path / "absolute_outputs"
+
+    result = bids_batch_process(
+        project,
+        tag_folder_levels=[("TP",)],
+        output_folder_name=output_root,
+        load_func=_flexible_batch_load_ok,
+        save_func=_flexible_batch_save_touch,
+        verbose=False)
+
+    assert len(result.processed) == 1
+    assert result.processed[0].output_path == output_root / "a_omio_converted.ome.tif"
+    assert result.processed[0].output_path.exists()
+
+def test_bids_batch_process_load_error_is_reported(tmp_path):
+    project = tmp_path / "project"
+    img = _touch_flexible_batch_image(project, "ID001", "TP000", "a.raw")
+
+    def load_fails(path, **kwargs):
+        raise ValueError("bad metadata")
+
+    result = bids_batch_process(
+        project,
+        tag_folder_levels=[("TP",)],
+        load_func=load_fails,
+        save_func=_flexible_batch_save_touch,
+        verbose=False)
+
+    assert len(result.failed) == 1
+    assert result.failed[0].stage == "load"
+    assert result.error_report_path is not None
+    assert result.error_report_path.exists()
+    assert result.local_error_report_paths
+    text = result.error_report_path.read_text(encoding="utf-8")
+    assert "OMIO_BATCH_FAILED_RAW_FILES" in text
+    assert str(img) in text
+
+def test_bids_batch_process_process_error_is_reported(tmp_path):
+    project = tmp_path / "project"
+    _touch_flexible_batch_image(project, "ID001", "TP000", "a.tif")
+
+    def process_fails(*, image, metadata, record, processing_options):
+        raise RuntimeError("process exploded")
+
+    result = bids_batch_process(
+        project,
+        tag_folder_levels=[("TP",)],
+        load_func=_flexible_batch_load_ok,
+        process_func=process_fails,
+        save_func=_flexible_batch_save_touch,
+        verbose=False)
+
+    assert len(result.failed) == 1
+    assert result.failed[0].stage == "process"
+    assert "RuntimeError: process exploded" in result.report_path.read_text(encoding="utf-8")
+
+def test_bids_batch_process_save_error_is_reported(tmp_path):
+    project = tmp_path / "project"
+    _touch_flexible_batch_image(project, "ID001", "TP000", "a.tif")
+
+    def save_fails(*, image, metadata, record, output_dir, output_path, save_options):
+        raise OSError("disk full")
+
+    result = bids_batch_process(
+        project,
+        tag_folder_levels=[("TP",)],
+        load_func=_flexible_batch_load_ok,
+        process_func=_flexible_batch_process_ok,
+        save_func=save_fails,
+        verbose=False)
+
+    assert len(result.failed) == 1
+    assert result.failed[0].stage == "save"
+    assert "OSError: disk full" in result.report_path.read_text(encoding="utf-8")
+
+def test_bids_batch_process_run_report_is_updated(tmp_path):
+    project = tmp_path / "project"
+    _touch_flexible_batch_image(project, "ID001", "TP000", "a.tif")
+
+    result1 = bids_batch_process(
+        project,
+        tag_folder_levels=[("TP",)],
+        load_func=_flexible_batch_load_ok,
+        process_func=_flexible_batch_process_ok,
+        save_func=_flexible_batch_save_touch,
+        processing_options={"details": "first"},
+        verbose=False)
+    result2 = bids_batch_process(
+        project,
+        tag_folder_levels=[("TP",)],
+        load_func=_flexible_batch_load_ok,
+        process_func=_flexible_batch_process_ok,
+        save_func=_flexible_batch_save_touch,
+        verbose=False)
+
+    payload = yaml.safe_load(result2.run_report_yaml_path.read_text(encoding="utf-8"))
+    file_entry = payload["files"]["ID001/TP000/a.tif"]
+    assert len(file_entry["runs"]) == 2
+    assert file_entry["runs"][0]["status"] == "processed"
+    assert file_entry["runs"][1]["status"] == "already_processed"
+    assert result1.report_path == result2.report_path
+
+def test_bids_batch_process_custom_process_func_is_reported(tmp_path):
+    project = tmp_path / "project"
+    _touch_flexible_batch_image(project, "ID001", "TP000", "a.tif")
+
+    def custom_z_projection(*, image, metadata, record, processing_options):
+        return image, metadata, {"details": "z projection applied"}
+
+    result = bids_batch_process(
+        project,
+        tag_folder_levels=[("TP",)],
+        load_func=_flexible_batch_load_ok,
+        process_func=custom_z_projection,
+        save_func=_flexible_batch_save_touch,
+        processing_options={
+            "projection": "max",
+            "keepdims": True},
+        verbose=False)
+
+    payload = yaml.safe_load(result.run_report_yaml_path.read_text(encoding="utf-8"))
+    run = payload["files"]["ID001/TP000/a.tif"]["runs"][0]
+    report_text = result.report_path.read_text(encoding="utf-8")
+    assert run["method"] == "custom_z_projection"
+    assert "z projection applied" in run["details"]
+    assert "projection='max'" in run["details"]
+    assert "custom_z_projection" in report_text
+
+def test_batch_create_thorlabs_raw_yaml_templates_from_error_report(tmp_path):
+    project = tmp_path / "project"
+    raw = _touch_flexible_batch_image(project, "ID001", "TP000", "Image_001_001.raw")
+    report = project / "omio_batch_error_report_2026-08-20_12-00-00.txt"
+    report.write_text(
+        "OMIO_BATCH_FAILED_RAW_FILES = {\n"
+        f"    {str(raw)!r}: {{\n"
+        "        'reason': 'bad xml',\n"
+        "        'stage': 'load',\n"
+        "        'subject_id': 'ID001',\n"
+        "        'tag_folders': ('TP000',),\n"
+        "        'reported_at': '2026-08-20_12-00-00',\n"
+        "        'template_metadata': {\n"
+        "            'T': 2,\n"
+        "            'Z': 1,\n"
+        "            'C': 1,\n"
+        "            'Y': 3,\n"
+        "            'X': 4,\n"
+        "            'bits': 16,\n"
+        "            'pixelunit': 'micron',\n"
+        "            'physicalsize_xyz': (0.2, 0.3, 1.0),\n"
+        "            'time_increment': 1.5,\n"
+        "            'time_increment_unit': 'seconds',\n"
+        "        },\n"
+        "    },\n"
+        "}\n",
+        encoding="utf-8")
+
+    result = batch_create_thorlabs_raw_yaml_templates(
+        project,
+        report_name=report.name,
+        verbose=False)
+
+    assert len(result.created) == 1
+    yaml_path = raw.with_name("Image_001_001_metadata.yaml")
+    assert yaml_path.exists()
+    metadata = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    assert metadata["T"] == 2
+    assert metadata["PhysicalSizeX"] == pytest.approx(0.2)
 
 # %% _dispatch_read_file
 
