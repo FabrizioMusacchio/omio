@@ -7,6 +7,10 @@ Each release is also archived on Zenodo for long-term preservation and citation 
 
 [![Zenodo Archive](https://img.shields.io/badge/Zenodo%20Archive-10.5281%2Fzenodo.18030883-blue)](https://doi.org/10.5281/zenodo.18030883)
 
+<!-- ---
+
+### 🔜 OMIO v0.3.1 - UNRELEASED -->
+
 ---
 
 ### 🚀 OMIO v0.3.0
