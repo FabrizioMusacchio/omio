@@ -155,8 +155,7 @@ Axis squeezing and cache generation are performed explicitly and transparently.
 OMIO provides utility functions to create empty metadata and image templates that can be populated programmatically or used as blueprints for new datasets.
 
 ## Expected project structure (BIDS-like)
-OMIO supports batch processing of projects organized in a BIDS-like manner.  
-An abstract example is shown below:
+OMIO supports batch processing of projects organized in a BIDS-like manner. An abstract example is shown below:
 
 ```bash
 project_name/
@@ -222,15 +221,7 @@ omio.imconvert("experiment_folder")
 ```
 
 ### Batch processing over a BIDS-like project
-
-`bids_batch_process()` supports
-explicit subject IDs or subject-prefix discovery, arbitrary folder-token levels,
-file-pattern filtering, name-based exclusion, skip-if-already-converted behavior, and
-persistent run/error reports in the project root.
-Use `output_folder_name` for relative or absolute output locations; `save_options`
-is reserved for writer settings such as `overwrite` or `compression_level`.
-OME-TIFF multi-file series are collapsed during discovery by default, and optional
-`folder_stacks` tags can be used to merge tagged stack folders before processing.
+`bids_batch_process()` supports explicit subject IDs or subject-prefix discovery, arbitrary folder-token levels, file-pattern filtering, name-based exclusion, skip-if-already-converted behavior, and persistent run/error reports in the project root. Use `output_folder_name` for relative or absolute output locations; `save_options` is reserved for writer settings such as `overwrite` or `compression_level`. OME-TIFF multi-file series are collapsed during discovery by default, and optional `folder_stacks` tags can be used to merge tagged stack folders before processing.
 
 ```python
 result = omio.bids_batch_process(
@@ -276,6 +267,17 @@ At the moment, OMIO supports reading the following microscopy file formats:
 
 OMIO relies on the following third-party libraries for file format handling:
 * `tifffile`, `czifile`, `numpy`, `zarr`, `dask`, `napari`, `tqdm`, `pyyaml`, `imagecodecs`, `numcodecs`
+
+
+## Tutorials and documentation
+A comprehensive documentation website is available at: <https://omio.readthedocs.io>
+
+The repository folder `additional_scripts` contains example scripts and Jupyter notebooks that demonstrate typical usage patterns, including:
+
+* `usage_example_interactive.py` 
+* `usage_example_interactive.ipynb`
+
+Both scripts demonstrate interactive usage of OMIO in a Python script, including reading, merging, writing, and visualization in napari. Also included: Zarr-backed caching, BIDS-like batch processing, and Thorlabs RAW YAML sidecar generation, empty metadata and image templates, and OME-compliance checks upon writing.
 
 
 ## Requests for new file formats and reader extensions
