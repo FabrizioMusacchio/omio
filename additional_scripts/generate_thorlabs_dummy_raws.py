@@ -10,7 +10,6 @@ import os
 import numpy as np
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
-
 # %% FUNCTIONS
 def write_example_xml(
     xml_path,
@@ -23,8 +22,7 @@ def write_example_xml(
     pixel_size_um=0.5,
     z_step_um=1.0,
     time_interval_s=1.0,
-    bits=16,
-):
+    bits=16):
     """
     Create a minimal Thorlabs-like XML file that matches the expectations
     of read_thorlabs_raw().
@@ -74,8 +72,7 @@ def write_dummy_raw(
     C,
     Y,
     X,
-    dtype=np.uint16,
-):
+    dtype=np.uint16):
     """
     Write a RAW file with a simple ramp pattern.
     Data layout is contiguous and matches reshape((T,Z,C,Y,X)).
@@ -98,8 +95,7 @@ def generate_case(base_dir, name, *, T, Z, C, Y, X):
     write_dummy_raw(
         raw_path,
         T=T, Z=Z, C=C, Y=Y, X=X,
-        dtype=np.uint16,
-    )
+        dtype=np.uint16)
 
     write_example_xml(
         xml_path,
@@ -111,9 +107,7 @@ def generate_case(base_dir, name, *, T, Z, C, Y, X):
         pixel_size_um=0.5,
         z_step_um=1.0,
         time_interval_s=1.0,
-        bits=16,
-    )
-
+        bits=16)
 # %% MAIN
 if __name__ == "__main__":
     out_root = "thorlabs_dummy_data"
@@ -130,8 +124,7 @@ if __name__ == "__main__":
         Z=1,
         C=1,
         Y=20,
-        X=20,
-    )
+        X=20)
 
     # Case 2: C=2, Z=1, T=1
     generate_case(
@@ -141,8 +134,7 @@ if __name__ == "__main__":
         Z=1,
         C=2,
         Y=20,
-        X=20,
-    )
+        X=20)
 
     # Case 3: C=2, Z=10, T=5
     generate_case(
@@ -152,7 +144,6 @@ if __name__ == "__main__":
         Z=10,
         C=2,
         Y=20,
-        X=20,
-    )
+        X=20)
 
     print("\nAll dummy Thorlabs RAW test cases created.")
