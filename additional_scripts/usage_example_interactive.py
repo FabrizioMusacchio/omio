@@ -965,7 +965,12 @@ print(f"Z projection skipped:   {len(result_z_projection.skipped)}")
 print(f"Z projection failed:    {len(result_z_projection.failed)}")
 print(f"Run report: {result_z_projection.report_path}")
 
-# %% OMIO'S OLD BATCH CONVERSION FUNCTION (DEPRECATED)
+# %% OMIO'S OLD BATCH CONVERSION FUNCTION (!!DEPRECATED!!)
+""" DEPRECATED: OMIO's `bids_batch_convert` function is deprecated since OMIO v0.3.0.
+However, we keep this tutorial cell for backward compatibility and to show how the old 
+function works. New workflows should use `bids_batch_process` instead.
+"""
+
 """
 OMIO's original `bids_batch_convert` function is still available for backward
 compatibility, but it is deprecated since OMIO v0.3.0. New workflows should prefer
