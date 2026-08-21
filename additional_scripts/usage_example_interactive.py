@@ -35,7 +35,7 @@ script location (e.g., "../example_dataset/example_image.tif").
 Script information
 ----------------------
 author: Fabrizio Musacchio
-date: December 2025
+date:   December 2025
 """
 # %% IMPORTS
 import omio as om
