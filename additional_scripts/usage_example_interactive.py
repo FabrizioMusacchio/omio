@@ -901,6 +901,21 @@ print(f"Skipped:    {len(result.skipped)}")
 print(f"Failed:     {len(result.failed)}")
 print(f"Run report: {result.report_path}")
 print(f"Error report: {result.error_report_path}")
+
+"""
+If Thorlabs RAW files fail because XML metadata are missing or unusable, OMIO writes
+an editable `omio_batch_error_report_<timestamp>.txt` in the project root. Edit the
+`template_metadata` blocks in that report and then distribute YAML sidecars with:
+
+result_yaml = om.batch_create_thorlabs_raw_yaml_templates(
+    project_root,
+    report_name="omio_batch_error_report_YYYY-MM-DD_HH-MM-SS.txt",
+    overwrite_existing=False,
+    verbose=True)
+
+print(f"Created YAML templates: {len(result_yaml.created)}")
+print(f"Skipped RAW files:      {len(result_yaml.skipped)}")
+"""
 # %% CUSTOM BATCH PROCESSING FUNCTION FOR BIDS-LIKE FOLDER TREES
 """
 You can also keep OMIO's default loading and saving behavior, but insert your own
@@ -1059,21 +1074,6 @@ fname_converted = "../example_data/tif_dummy_data/BIDS_project_example/ID0001/TP
 image, metadata = om.imread(fname_converted)
 print(f"Multi-file OME-TIFF image shape: {image.shape} with axes {metadata.get('axes', 'N/A')}")
 om.open_in_napari(image, metadata)
-
-"""
-If Thorlabs RAW files fail because XML metadata are missing or unusable, OMIO writes
-an editable `omio_batch_error_report_<timestamp>.txt` in the project root. Edit the
-`template_metadata` blocks in that report and then distribute YAML sidecars with:
-
-result_yaml = om.batch_create_thorlabs_raw_yaml_templates(
-    project_root,
-    report_name="omio_batch_error_report_YYYY-MM-DD_HH-MM-SS.txt",
-    overwrite_existing=False,
-    verbose=True)
-
-print(f"Created YAML templates: {len(result_yaml.created)}")
-print(f"Skipped RAW files:      {len(result_yaml.skipped)}")
-"""
 # %% CREATING EMPTY, OME-COMPLIANT IMAGE ARRAYS AND METADATA
 """
 OMIO provides a utility functions called `create_empty_image`, `create_empty_metadata`, and
