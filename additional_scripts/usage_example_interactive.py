@@ -480,7 +480,7 @@ dataset. You can not simply provide a list of arbitrary TIFF files and expect OM
 assemble them correctly without the required OME metadata, even though the single TIFF files'
 names may contain hints about their position in the series (e.g., Z-slice or time point).
 """
-# %% READ LARGE FILES LAZILY WITH ZARR BACKEND
+# %% READ LARGE FILES LAZILY WITH ZARR BACKEND AND OPTIONAL DISK MEMORY MAPPING AND DASK SUPPORT
 """
 OMIO supports reading large image files that do not fit into memory by Zarr-backed lazy loading
 and optional memory mapping on disk. To read a large TIFF file lazily, use the `imread` function
@@ -558,14 +558,8 @@ print(f"Roundtrip shape: {image_zarr_roundtrip.shape}")
 om.cleanup_omio_cache(fname, full_cleanup=False)  # set full_cleanup=True to remove the entire .omio_cache folder
 om.cleanup_omio_cache(fname, full_cleanup=True)
 om.cleanup_omio_cache(cache_store, full_cleanup=True)
-# %% EFFICIENTLY VIEW LARGE IMAGES IN NAPARI WITH OMIO'S DASK SUPPORT
-"""
-To efficiently view large images in Napari without loading the entire dataset into memory,
-you can use OMIO's built-in support for lazy loading and combine it with OMIO's Napari
-integration, which supports a) handling of in-memory and on-disk memory-mapped Zarr arrays,
-b) automatic axis reordering based on OME semantics, and c) DASK support for out-of-core
-parallel processing.
-"""
+
+
 # %% REUSE AN EXISTING ON-DISK OMIO CACHE
 """
 If you repeatedly open the same large file with `zarr_store="disk"`, OMIO can reuse an
@@ -643,6 +637,14 @@ of the paper. Thus, let's correct the corresponding metadata entry so that Napar
 correctly scale the Z axis upon viewing:
 """
 metadata_large["PhysicalSizeZ"] = 5  # in microns
+
+""" EFFICIENTLY VIEW LARGE IMAGES IN NAPARI WITH OMIO'S DASK SUPPORT
+To efficiently view large images in Napari without loading the entire dataset into memory,
+you can use OMIO's built-in support for lazy loading and combine it with OMIO's Napari
+integration, which supports a) handling of in-memory and on-disk memory-mapped Zarr arrays,
+b) automatic axis reordering based on OME semantics, and c) DASK support for out-of-core
+parallel processing.
+"""
 
 # now open the large image in Napari. First, we do it w/o DASK (`zarr_mode="zarr_nodask"`):
 om.open_in_napari(image_large, metadata_large, zarr_mode="zarr_nodask")
